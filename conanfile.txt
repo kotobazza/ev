@@ -1,0 +1,6 @@
+[requires]
+drogon/1.8.4
+
+[generators]
+PkgConfigDeps
+MesonToolchain
