@@ -1,3 +1,0 @@
-[submodule "external/drogon"]
-	path = external/drogon
-	url = https://github.com/drogonframework/drogon.git
