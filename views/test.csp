@@ -1,0 +1,11 @@
+<!-- views/test.csp -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${title}</title>
+</head>
+<body>
+    <h1>${header}</h1>
+    <p>Текущее время: <%="%.2f".format(now)%></p>
+</body>
+</html>
