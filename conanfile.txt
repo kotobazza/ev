@@ -6,3 +6,9 @@ hiredis/1.2.0
 [generators]
 PkgConfigDeps
 MesonToolchain
+
+
+[options]
+drogon/1.9.10:with_ctl=True
+drogon/1.9.10:with_redis=True
+drogon/1.9.10:with_postgres=True
