@@ -1,7 +1,6 @@
 [requires]
 drogon/1.9.10
-libpq/16.8
-hiredis/1.2.0
+
 
 [generators]
 PkgConfigDeps
