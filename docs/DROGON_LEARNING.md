@@ -28,10 +28,43 @@
                   + : Предполагал, что можно заставить conan сделать ссылку на эту утилиту или же каким-то образом переместить эту утилиту к себе, но не вышло
                     + Разве что каким-то супер необычным образом писать собственный рецепт conanfile.py и уже им перетаскивать эту утилиту или формировать скрипт `.sh`
                     + 
-        
+        + Update 5
+          + `conan install . --output-folder=builddir/build_conan -s build_type=Release -d direct_deploy --deployer-folder builddir/build_conan/deploy --build=missing`
+            + Теперь drogon_ctl валяется в доступной директории build. С дополнительными изменениями conanfile.py, у меня появляется скрипт вроде venv/activate.sh, только для этой самой утилиты.
+          + **Проблема остается**: drogon_ctl при динамической компиляции test.csp файлов не видит бибилотеки, которые нужны для сборки самого drogon, поэтому у меня опять ничего не компилируется.
+            + К тому же, компиляционные файлы csp остаются в той же директории, где работает эта drogon_ctl (а это часть src/), а не в build. 
 
 
 
+
+
+
+
+Привет, я хочу, чтобы conan2 сгенерировал мне скрипт, который позволит добавить drogon_ctl в PATH.
+У меня уже есть следующая команда 
+
+conan install . --output-folder=builddir/build_conan -s build_type=Release -d direct_deploy --deployer-folder builddir/build_conan/deploy --build=missing
+
+и следующий conanfile.txt
+
+[requires]
+drogon/1.9.10
+
+
+[generators]
+PkgConfigDeps
+MesonToolchain
+
+
+[options]
+drogon/1.9.10:with_ctl=True
+drogon/1.9.10:with_redis=True
+drogon/1.9.10:with_postgres=True
+
+
+вместе они позволяют мне поставить саму библиотеку drogon в кеш conan2, а также оставляют мне утилиту drogon_ctl по следующему пути: builddir/build_conan/deploy/direct_deploy/drogon/bin/
+
+так вот - мне нужно, чтобы conan в автоматизированном виде генерировал мне какой-то скрипт, который добавит сгенерированный deploy путь в PATH для отдельной сессии терминала, где будет запускаться само приложение
 
 
 
