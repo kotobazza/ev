@@ -25,5 +25,6 @@
     <%c++ }else{%>
     <H1>no parameter</H1>
     <%c++}%>
+    <p>Hello World!</p>
 </body>
 </html>
