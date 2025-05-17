@@ -10,6 +10,7 @@ class DrogonAppCustom(ConanFile):
 
     def requirements(self):
         self.requires("drogon/1.9.10")
+        self.requires("gtest/1.16.0")
 
     def configure(self):
         self.options["drogon"].with_ctl = True
