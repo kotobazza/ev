@@ -2,7 +2,6 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <openssl/sha.h>
 #include "bignum.hpp"
 #include <openssl/evp.h>
 
