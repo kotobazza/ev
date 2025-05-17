@@ -8,9 +8,66 @@ deps = [
   dependency('openssl'),
   dependency('zlib'),
   dependency('threads'),
+  dependency('trantor'),
 ]
 
+drogon_ctl_check = run_command(
+  'sh', '-c', 
+  '. @0@/build_conan/activate_drogon_ctl.sh && which drogon_ctl'.format(meson.current_build_dir()),
+  check: false
+)
+
+if drogon_ctl_check.returncode() != 0
+  warning('''
+    drogon_ctl не найден! Возможно, не активировано окружение Drogon.
+    Выполните вручную:
+      source @0@/build_conan/activate_drogon_ctl.sh
+    или убедитесь, что Drogon установлен через Conan.
+  '''.format(meson.current_build_dir()))
+else
+  message('drogon_ctl найден:', drogon_ctl_check.stdout().strip())
+endif
+
+# Генерация view из .csp файлов
+view_sources = []
+view_headers = []
+
+# Получаем список .csp файлов
+csp_files = []
+views_dir = meson.current_source_dir() / 'views'
+if run_command('test', '-d', views_dir, check: false).returncode() == 0
+  csp_files = run_command('find', views_dir, '-name', '*.csp', check: false)
+  if csp_files.returncode() == 0
+    foreach csp_file : csp_files.stdout().split('\n')
+      if csp_file != ''
+        message('Processing csp file:', csp_file)
+        classname = run_command('basename', '-s', '.csp', csp_file, check: true).stdout().strip()
+        message('Generating view class:', classname)
+        
+        # Генерируем файлы через custom_target
+        generated = custom_target(
+          'view_' + classname,
+          output: [classname + '.h', classname + '.cc'],
+          input: csp_file,
+          command: ['drogon_ctl', 'create', 'view', '@INPUT@'],
+          build_by_default: true,
+        )
+        
+        # Добавляем сгенерированные файлы в список источников
+        view_sources += generated[1]  # .cc файл
+        view_headers += generated[0]  # .h файл
+      endif
+    endforeach
+  else
+    warning('Не удалось найти .csp файлы в директории views')
+  endif
+else
+  warning('Директория views не найдена')
+endif
+
 executable('drogon_demo',
-  sources: 'src/main.cpp',
+  sources: ['src/main.cpp'] + view_sources,
   dependencies: deps,
   install: true)
+
+run_command('mkdir', '-p', meson.current_build_dir() / 'logs', check: false)

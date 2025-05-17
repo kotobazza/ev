@@ -1,8 +1,0 @@
-[requires]
-drogon/1.8.4
-libpq/16.8
-hiredis/1.2.0
-
-[generators]
-PkgConfigDeps
-MesonToolchain
