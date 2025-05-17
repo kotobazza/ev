@@ -40,6 +40,14 @@ class BigNum {
         return *this;
     }
 
+    bool operator<(const BigNum& rhs) const { return BN_cmp(this->bn, rhs.bn) < 0; }
+
+    bool operator>(const BigNum& rhs) const { return BN_cmp(this->bn, rhs.bn) > 0; }
+
+    bool operator<=(const BigNum& rhs) const { return BN_cmp(this->bn, rhs.bn) <= 0; }
+
+    bool operator>=(const BigNum& rhs) const { return BN_cmp(this->bn, rhs.bn) >= 0; }
+
     ~BigNum() { BN_free(bn); }
 
     std::string toString() const {
@@ -173,7 +181,6 @@ class BigNum {
     const BIGNUM* raw() const { return bn; }
     BIGNUM* raw() { return bn; }
 };
-
 
 BigNum gcd(const BigNum& a, const BigNum& b) {
     BigNum x = a, y = b;
