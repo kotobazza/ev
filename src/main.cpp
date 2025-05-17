@@ -11,6 +11,7 @@ int main() {
         },
         {drogon::Get});
 
+        
     // Обработчик для /about
     drogon::app().registerHandler(
         "/about",
