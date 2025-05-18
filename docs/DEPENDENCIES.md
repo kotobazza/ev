@@ -6,3 +6,4 @@ sudo dnf install perl-FindBin perl-Digest-SHA
 
 
 + OpenSSL/bn.h
++ GTest
