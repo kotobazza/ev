@@ -2,9 +2,9 @@
 #include <vector>
 
 #include "bignum.hpp"
-#include "pailier.hpp"
 #include "blind_signature.hpp"
-
+#include "pailier.hpp"
+#include "zkp.hpp"
 
 TEST(MultiprecisionArithmetic, IsBigNumClassWorks) {
     BigNum a("111");
@@ -59,8 +59,6 @@ TEST(PailierCryptography, SimpleUsecase) {
 }
 
 TEST(BlindSignature, SimpleTest) {
-
-    
     try {
         // std::cout << "🔹 Генерация ключей RSA..." << std::endl;
         RSAKeyPair rsa;
@@ -80,12 +78,89 @@ TEST(BlindSignature, SimpleTest) {
         // std::cout << "\n🔹 Снятие ослепления..." << std::endl;
         BigNum signature = BlindSignature::unblind(s_blinded, r, rsa.publicKey.n);
 
-        
         // std::cout << "Полученная подпись: " << signature.toString() << std::endl;
 
         // std::cout << "\n🔹 Проверка подписи..." << std::endl;
         [[maybe_unused]] bool is_valid = BlindSignature::verify(m, signature, rsa.publicKey.e, rsa.publicKey.n);
         // std::cout << "Подпись " << (is_valid ? "верна" : "неверна") << "!" << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Ошибка: " << e.what() << std::endl;
+    }
+}
+
+TEST(ZKP, SimpleTest) {
+    try {
+        // Генерация ключей
+        BigNum p("838382000974237847921957342377847823774311");
+        BigNum q("113011");
+        BigNum n = p * q;
+        BigNum lambdaVal = lcm(p - BigNum(1), q - BigNum(1));
+        BigNum g = n + BigNum(1);
+
+        // Варианты голосов (должны быть уникальными и достаточно большими)
+        std::vector<BigNum> voteVariants;
+        for (int i = 0; i < 4; ++i) {
+            voteVariants.push_back(BigNum(2).pow(BigNum(30 * i)));
+        }
+
+        // Тестовые голоса (должны быть из voteVariants)
+        std::vector<BigNum> votes;
+        for (int i = 0; i < 5; ++i) {
+            votes.push_back(BigNum(2).pow(BigNum(30 * 1)));
+        }
+
+        // Проверка, что все голоса из допустимых вариантов
+        /*
+        for (const auto& vote : votes) {
+            if (std::find(voteVariants.begin(), voteVariants.end(), vote) == voteVariants.end()) {
+                throw std::runtime_error("Голос не входит в допустимые варианты");
+            }
+        }
+        */
+
+        // Процесс голосования с доказательствами
+        std::vector<BigNum> encryptedVotes;
+        std::vector<CorrectMessageProof> proofs;
+
+        for (const auto& m : votes) {
+            // Генерация доказательства
+            CorrectMessageProof proof = CorrectMessageProof::prove(n, voteVariants, m);
+            proofs.push_back(proof);
+
+            // Проверка доказательства (это будет делать получатель)
+            if (!proof.verify()) {
+                throw std::runtime_error("Доказательство не прошло проверку");
+            }
+
+            // Сохраняем зашифрованный голос
+            encryptedVotes.push_back(proof.getCiphertext());
+
+            std::cout << "Зашифрованный голос: " << proof.getCiphertext().toString() << std::endl;
+        }
+
+        // Проверка всех бюллетеней перед подсчетом
+        std::cout << "Проверка всех бюллетеней перед подсчетом:" << std::endl;
+        for (size_t i = 0; i < proofs.size(); ++i) {
+            if (!proofs[i].verify()) {
+                std::cout << "Бюллетень " << i << " не прошел проверку!" << std::endl;
+            } else {
+                std::cout << "Бюллетень " << i << " корректен" << std::endl;
+            }
+        }
+
+        // Подсчет голосов (гомоморфное сложение)
+        BigNum encryptedSum(1);
+        for (const auto& vote : encryptedVotes) {
+            encryptedSum = (encryptedSum * vote) % (n * n);
+        }
+
+        // Расшифровка суммы
+        BigNum numerator = ((encryptedSum.modExp(lambdaVal, n * n) - BigNum(1)) / n) % n;
+        BigNum denominator = ((g.modExp(lambdaVal, n * n) - BigNum(1)) / n) % n;
+        BigNum decryptedSum = (numerator * denominator.modInverse(n)) % n;
+
+        std::cout << "Итоговый результат: " << decryptedSum.toString() << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Ошибка: " << e.what() << std::endl;
