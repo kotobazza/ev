@@ -102,27 +102,28 @@ class MerkleTree {
 
     std::string getRoot() const { return root ? root->hashHex : ""; }
 
-    std::vector<std::string> getProof(const std::string& leafHash) const {
-        std::vector<std::string> proof;
+    std::vector<std::pair<std::string, bool>> getProof(const std::string& leafHash) const {
+        std::vector<std::pair<std::string, bool>> proof;
 
         auto it = std::find_if(leaves.begin(), leaves.end(),
-                               [&leafHash](const std::shared_ptr<Node>& node) { return node->hashHex == leafHash; });
+                               [&leafHash](const auto& node) { return node->hashHex == leafHash; });
 
         if (it == leaves.end())
             return proof;
 
         std::shared_ptr<Node> current = *it;
-        // size_t index = std::distance(leaves.begin(), it);
 
         while (current != root) {
-            std::shared_ptr<Node> parent = findParent(current);
+            auto parent = findParent(current);
             if (!parent)
                 break;
 
             if (parent->left.get() == current.get() && parent->right) {
-                proof.push_back(parent->right->hashHex);
+                // Текущий узел — левый, его "брат" — правый (добавляем с флагом true)
+                proof.emplace_back(parent->right->hashHex, true);
             } else if (parent->right.get() == current.get()) {
-                proof.push_back(parent->left->hashHex);
+                // Текущий узел — правый, его "брат" — левый (добавляем с флагом false)
+                proof.emplace_back(parent->left->hashHex, false);
             }
 
             current = parent;
@@ -131,24 +132,42 @@ class MerkleTree {
         return proof;
     }
 
-    void serialize(std::ostream& out) const {
-        if (!root)
+    // void serialize(std::ostream& out) const {
+    //     if (!root)
+    //         return;
+
+    //     std::vector<std::shared_ptr<Node>> currentLevel = {root};
+    //     while (!currentLevel.empty()) {
+    //         std::vector<std::shared_ptr<Node>> nextLevel;
+
+    //         for (const auto& node : currentLevel) {
+    //             out << node->hashHex << " ";
+    //             if (node->left)
+    //                 nextLevel.push_back(node->left);
+    //             if (node->right)
+    //                 nextLevel.push_back(node->right);
+    //         }
+    //         out << "\n";
+    //         currentLevel = nextLevel;
+    //     }
+    // }
+
+    void serializeNode(std::ostream& out, const std::shared_ptr<Node>& node) const {
+        if (!node) {
+            out << "null";
             return;
-
-        std::vector<std::shared_ptr<Node>> currentLevel = {root};
-        while (!currentLevel.empty()) {
-            std::vector<std::shared_ptr<Node>> nextLevel;
-
-            for (const auto& node : currentLevel) {
-                out << node->hashHex << " ";
-                if (node->left)
-                    nextLevel.push_back(node->left);
-                if (node->right)
-                    nextLevel.push_back(node->right);
-            }
-            out << "\n";
-            currentLevel = nextLevel;
         }
+        out << "{ \"hash\": \"" << node->hashHex << "\", ";
+        out << "\"left\": ";
+        serializeNode(out, node->left);
+        out << ", \"right\": ";
+        serializeNode(out, node->right);
+        out << " }";
+    }
+
+    void serialize(std::ostream& out) const {
+        serializeNode(out, root);
+        out << "\n";
     }
 
    private:
