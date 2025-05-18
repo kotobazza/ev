@@ -5,6 +5,7 @@
 #include "blind_signature.hpp"
 #include "pailier.hpp"
 #include "zkp.hpp"
+#include "merklie_tree.hpp"
 
 TEST(MultiprecisionArithmetic, IsBigNumClassWorks) {
     BigNum a("111");
@@ -166,6 +167,58 @@ TEST(ZKP, SimpleTest) {
         std::cerr << "Ошибка: " << e.what() << std::endl;
     }
 }
+
+TEST(MerklieTree, SimpleUsage){
+    MerkleTree a;
+    a.addLeaf("1234");
+    a.addLeaf("12345");
+    a.addLeaf("12346");
+    a.addLeaf("12347");
+    a.addLeaf("12348");
+    a.addLeaf("12349");
+
+    EXPECT_EQ(a.getRoot(), "5816f1c61fa426728ee36f4275256c45855f1e5df157271d1411693a8ed47c92ab52a3ac8a4e9df6acccaa04405c4ff44710846d7ea0fe30ff364a42effa854d");
+
+    std::string input = "12349";
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    const EVP_MD *md = EVP_sha512();
+    unsigned char hash[SHA512_DIGEST_LENGTH];
+    unsigned int hash_len;
+
+    EVP_DigestInit_ex(mdctx, md, nullptr);
+    EVP_DigestUpdate(mdctx, input.c_str(), input.size());
+    EVP_DigestFinal_ex(mdctx, hash, &hash_len);
+    EVP_MD_CTX_free(mdctx);
+
+    std::stringstream ss;
+    for(int i = 0; i < SHA512_DIGEST_LENGTH; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+    }
+
+    std::string hex_ = ss.str();
+
+    auto b = a.getProof(hex_);
+
+
+    EXPECT_EQ(b.size(), static_cast<size_t>(2));
+    EXPECT_EQ(b[0], "2de2b0c9e6e6765d8000d0d6532759789eece2c60563a8ce6a0da857d0337b1c754e5606c5dfb73c37697110db0da1123505310b4e9938976c2010b81ef81a1e");
+    EXPECT_EQ(b[1], "8f54cde82fc63dd8f19047de1e8ba5319df1d45164f5506136b5a25838603a4a950c5a813851c1cf4a8dc2351f3c53a37497ff52889c050009847507511c6d9a");
+
+    a.removeLeaf(hex_);
+
+    EXPECT_EQ(a.getRoot(), "2a7b999456d176eed8f89997b665b602f193848dd616163f595ff054beda97d3fdd2346f123dc33e8a0c377e1b35bad9daa2c0ee9105fc764c3d4f0ec89cc2b3");
+
+}
+
+
+
+
+
+
+
+
+
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
