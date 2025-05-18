@@ -202,13 +202,23 @@ TEST(MerklieTree, SimpleUsage){
 
 
     EXPECT_EQ(b.size(), static_cast<size_t>(2));
-    EXPECT_EQ(b[0], "2de2b0c9e6e6765d8000d0d6532759789eece2c60563a8ce6a0da857d0337b1c754e5606c5dfb73c37697110db0da1123505310b4e9938976c2010b81ef81a1e");
-    EXPECT_EQ(b[1], "8f54cde82fc63dd8f19047de1e8ba5319df1d45164f5506136b5a25838603a4a950c5a813851c1cf4a8dc2351f3c53a37497ff52889c050009847507511c6d9a");
+    EXPECT_EQ(b[0].first, "2de2b0c9e6e6765d8000d0d6532759789eece2c60563a8ce6a0da857d0337b1c754e5606c5dfb73c37697110db0da1123505310b4e9938976c2010b81ef81a1e");
+    EXPECT_EQ(b[1].first, "8f54cde82fc63dd8f19047de1e8ba5319df1d45164f5506136b5a25838603a4a950c5a813851c1cf4a8dc2351f3c53a37497ff52889c050009847507511c6d9a");
+    EXPECT_EQ(b[0].second, false);
+    EXPECT_EQ(b[1].second, false);
+
 
     a.removeLeaf(hex_);
 
     EXPECT_EQ(a.getRoot(), "2a7b999456d176eed8f89997b665b602f193848dd616163f595ff054beda97d3fdd2346f123dc33e8a0c377e1b35bad9daa2c0ee9105fc764c3d4f0ec89cc2b3");
 
+
+    std::ofstream outFile("merkle_tree.json");
+
+    if (outFile.is_open()) {
+        a.serialize(outFile);
+        outFile.close();
+    } 
 }
 
 
