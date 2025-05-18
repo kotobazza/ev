@@ -14,7 +14,8 @@ deps = [
 # Добавляем GTest (будет найден через Conan)
 gtest_dep = dependency('gtest')  # Без `main: true`
 
-include_dirs = include_directories('include')
+crypto_includes = include_directories('include/crypto')
+controllers_includes = include_directories('include/controllers')
 
 drogon_ctl_check = run_command(
   'sh', '-c', 
@@ -70,12 +71,15 @@ else
   warning('Директория views не найдена')
 endif
 
-
+executable_sources = files([
+  'src/main.cpp',
+  'src/controllers/test_controller.cpp'
+])
 
 executable('drogon_demo',
-  sources: ['src/main.cpp'] + view_sources,
+  sources: executable_sources + view_sources,
   dependencies: deps,
-  include_directories: include_dirs,
+  include_directories: [controllers_includes, crypto_includes],
   install: true)
 
 test_sources = files([
@@ -86,7 +90,7 @@ if test_sources.length() > 0
   test_exec = executable('drogon_tests',
     sources: test_sources + view_sources,
     dependencies: deps + [gtest_dep],
-    include_directories: include_dirs,
+    include_directories: crypto_includes,
     install: false)
 
   test('Drogon tests', test_exec)
