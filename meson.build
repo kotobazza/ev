@@ -11,22 +11,27 @@ deps = [
   dependency('trantor'),
 ]
 
-drogon_ctl_check = run_command(
-  'sh', '-c', 
-  '. @0@/build_conan/activate_drogon_ctl.sh && which drogon_ctl'.format(meson.current_build_dir()),
-  check: false
-)
+# Добавляем GTest (будет найден через Conan)
+gtest_dep = dependency('gtest')  # Без `main: true`
 
-if drogon_ctl_check.returncode() != 0
-  warning('''
-    drogon_ctl не найден! Возможно, не активировано окружение Drogon.
-    Выполните вручную:
-      source @0@/build_conan/activate_drogon_ctl.sh
-    или убедитесь, что Drogon установлен через Conan.
-  '''.format(meson.current_build_dir()))
-else
-  message('drogon_ctl найден:', drogon_ctl_check.stdout().strip())
-endif
+include_dirs = include_directories('include')
+
+# drogon_ctl_check = run_command(
+#   'sh', '-c', 
+#   '. @0@/build_conan/activate_drogon_ctl.sh && which drogon_ctl'.format(meson.current_build_dir()),
+#   check: false
+# )
+
+# if drogon_ctl_check.returncode() != 0
+#   warning('''
+#     drogon_ctl не найден! Возможно, не активировано окружение Drogon.
+#     Выполните вручную:
+#       source @0@/build_conan/activate_drogon_ctl.sh
+#     или убедитесь, что Drogon установлен через Conan.
+#   '''.format(meson.current_build_dir()))
+# else
+#   message('drogon_ctl найден:', drogon_ctl_check.stdout().strip())
+# endif
 
 # Генерация view из .csp файлов
 view_sources = []
@@ -65,9 +70,30 @@ else
   warning('Директория views не найдена')
 endif
 
+
+
 executable('drogon_demo',
   sources: ['src/main.cpp'] + view_sources,
   dependencies: deps,
+  include_directories: include_dirs,
   install: true)
+
+test_sources = files([
+  'tests/tests.cpp',
+])
+
+if test_sources.length() > 0
+  test_exec = executable('drogon_tests',
+    sources: test_sources + view_sources,
+    dependencies: deps + [gtest_dep],
+    include_directories: include_dirs,
+    install: false)
+
+  test('Drogon tests', test_exec)
+endif
+
+
+
+
 
 run_command('mkdir', '-p', meson.current_build_dir() / 'logs', check: false)
