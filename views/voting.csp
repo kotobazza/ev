@@ -55,35 +55,35 @@
     </div>
     
     <script>
-        // Инициализация публичного ключа Paillier
-        const publicKey = {
-            n: BigInt('{%crypto_parametr_n%}'),
-            g: BigInt('{%crypto_parametr_n%}') + 1n // Стандартное значение g = n + 1
-        };
+        function gcd(a, b) {
+            a = BigInt(a);
+            b = BigInt(b);
 
-        // Генерация вариантов голосования (используем большие числа)
-        const voteVariants = [];
-        for (let i = 0; i < {%options_amount%}; i++) {
-            voteVariants.push(modPow(2n, 30n * BigInt(i), publicKey.n ** 2n));
+            while (b !== 0n) {
+                [a, b] = [b, a % b];
+            }
+
+            return a;
         }
 
-        // Функция для генерации случайного BigInt в диапазоне [1, max)
-        function randomBigInt(max) {
-            const bytesNeeded = Math.ceil(max.toString(2).length / 8);
-            let randomValue;
-            
-            do {
-                const randomBytes = new Uint8Array(bytesNeeded);
-                crypto.getRandomValues(randomBytes);
-                randomValue = BigInt('0x' + Array.from(randomBytes)
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('')) % max;
-            } while (randomValue === 0n);
-            
-            return randomValue;
+        function lcm(a, b) {
+            a = BigInt(a);
+            b = BigInt(b);
+
+            if (a === 0n || b === 0n) {
+                return 0n;
+            }
+
+            const absProduct = (a * b) < 0n ? -(a * b) : a * b;
+            const gcdValue = gcd(a, b);
+
+            return absProduct / BigInt(gcdValue);
         }
 
-        // Функция для модульного возведения в степень
+        function L(x, n) {
+            return (x - 1n) / n
+        }
+
         function modPow(base, exponent, modulus) {
             if (modulus === 1n) return 0n;
             let result = 1n;
@@ -98,19 +98,77 @@
             return result;
         }
 
+        function modInverse(a, m) {
+            a = BigInt(a);
+            m = BigInt(m);
+
+            if (m === 1n) return 0n;
+
+            let [old_r, r] = [a, m];
+            let [old_s, s] = [1n, 0n];
+            let [old_t, t] = [0n, 1n];
+
+            while (r !== 0n) {
+                const quotient = old_r / r;
+                [old_r, r] = [r, old_r - quotient * r];
+                [old_s, s] = [s, old_s - quotient * s];
+                [old_t, t] = [t, old_t - quotient * t];
+            }
+
+            if (old_r !== 1n) {
+                throw new Error('Обратный элемент не существует: a и m не взаимно просты');
+            }
+
+            return (old_s % m + m) % m;
+        }
+
+        function randomBigInt(max) {
+            const bytesNeeded = Math.ceil(max.toString(2).length / 8);
+            let randomValue;
+
+            do {
+                const randomBytes = new Uint8Array(bytesNeeded);
+                crypto.getRandomValues(randomBytes);
+                randomValue = BigInt('0x' + Array.from(randomBytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('')) % max;
+            } while (randomValue === 0n);
+
+            return randomValue;
+        }
+
+        const voting_id = 123;
+
+        const N = BigInt('{%crypto_parametr_n%}');
+
+        const publicKey = {
+            n: N,
+            g: N + 1n // Стандартное значение g = n + 1
+        };
+        console.log("pubkey is ready");
+
+        // Генерация вариантов голосования
+        const voteVariants = [];
+        for (let i = 0; i < {%options_amount%}; i++) {
+            voteVariants.push(modPow(2n, 30n * BigInt(i), publicKey.n ** 2n));
+        }
+
+        console.log("vote variants ready");
+
+
         function encryptPaillier(m, publicKey) {
             // 1. Выбираем случайное r ∈ Z*_n
             let r;
             do {
                 r = randomBigInt(publicKey.n);
-            } while (r === 0n || r === 1n); // Убедимся, что r ≠ 0 и r ≠ 1
+            } while (gcd(r, publicKey.n) !== 1n);
 
             // 2. Вычисляем шифротекст: c = (g^m mod n²) * (r^n mod n²) mod n²
             const n2 = publicKey.n ** 2n;
             const gm = modPow(publicKey.g, m, n2);
             const rn = modPow(r, publicKey.n, n2);
             const ciphertext = (gm * rn) % n2;
-            
+
             return {
                 ciphertext: ciphertext,
                 r: r // Сохраняем r для доказательства
@@ -118,115 +176,193 @@
         }
 
         // Генерация доказательства корректности сообщения (адаптированная версия)
-        function generateProof(publicKey, validMessages, messageToEncrypt) {
-            const n = publicKey.n;
-            const n2 = n ** 2n;
-            const B = 256n; // Параметр безопасности
-            
-            // Шифруем сообщение
-            const { ciphertext, r } = encryptPaillier(messageToEncrypt, publicKey);
-            
-            // Находим индекс истинного сообщения
-            const trueIndex = validMessages.findIndex(m => m === messageToEncrypt);
-            
-            // Генерируем случайные значения для ложных утверждений
-            const eFalse = [];
-            const zFalse = [];
-            for (let i = 0; i < validMessages.length - 1; i++) {
-                eFalse.push(randomBigInt(2n ** B));
-                zFalse.push(randomBigInt(n));
+        async function generateProof(publicKey, validMessages, messageToEncrypt) {
+            console.log("valid messages: ", validMessages);
+            const n = publicKey.n
+            const B = 256; // Параметр безопасности
+            const nn = n * n;
+            const g = publicKey.g; // Стандартное значение g для Paillier
+
+            // 1. Генерация случайного r и шифрование сообщения
+            let r;
+            do {
+                r = randomBigInt(n);
+            } while (gcd(r, n) !== 1n);
+
+            console.log("generated r: ", r.toString());
+            messageToEncrypt = BigInt(messageToEncrypt);
+
+            const ciphertext = encryptPaillier(messageToEncrypt, { n, g }).ciphertext;
+
+            console.log("encrypted");
+
+            // 2. Вычисление u_i для каждого допустимого сообщения
+            const uiVec = [];
+            for (const m of validMessages) {
+                const gm = (m * n + 1n) % nn;
+                const gmInv = modInverse(gm, nn);
+                const ui = (ciphertext * gmInv) % nn;
+                uiVec.push(ui);
             }
-            
-            // Генерируем случайное w
-            const w = randomBigInt(n);
-            
-            // Вычисляем a_i для каждого сообщения
-            const aVec = [];
-            let falseIdx = 0;
-            for (let i = 0; i < validMessages.length; i++) {
+
+            // 3. Генерация случайных e_j и z_j для всех сообщений, кроме истинного
+            const numOfMessages = validMessages.length;
+            const eiVec = [];
+            const ziVec = [];
+
+            console.log("ei/zi");
+            for (let i = 0; i < numOfMessages - 1; i++) {
+                let ei = randomBigInt(BigInt(2)**BigInt(B));
+                console.log("ei: ", ei);
+                
+                eiVec.push(ei);
+
+                let zi;
+                do {
+                    zi = randomBigInt(n);
+                } while (zi < 2n);
+                console.log("zi", zi);
+                ziVec.push(zi);
+            }
+            console.log("-----");
+            console.log("wi")
+
+            // 4. Генерация случайного w
+            let w;
+            do {
+                w = randomBigInt(n);
+                console.log(w);
+            } while (w < 2n);
+            console.log("-----");
+
+            // 5. Находим индекс истинного сообщения
+            const trueIndex = validMessages.indexOf(messageToEncrypt);
+            if (trueIndex === -1) {
+                throw new Error("Message to encrypt is not in valid messages list");
+            }
+
+            // 6. Вычисляем a_i для каждого сообщения
+            const aiVec = [];
+            let j = 0;
+            for (let i = 0; i < numOfMessages; i++) {
                 if (i === trueIndex) {
-                    let val = modPow(w, n, n2);
-                    aVec.push(val);
+                    aiVec.push(modPow(w, n, nn));
                 } else {
-                    const mDiff = validMessages[i] - messageToEncrypt;
-                    const ui = (ciphertext * modPow(publicKey.g, mDiff * (n - 1n), n2)) % n2;
-                    const ai = (modPow(zFalse[falseIdx], n, n2) * modPow(ui, eFalse[falseIdx], n2)) % n2;
-                    aVec.push(ai);
-                    falseIdx++;
+                    const ziN = modPow(ziVec[j], n, nn);
+                    const uiEi = modPow(uiVec[i], eiVec[j], nn);
+                    const uiEiInv = modInverse(uiEi, nn);
+                    const ai = (ziN * uiEiInv) % nn;
+                    aiVec.push(ai);
+                    j++;
                 }
             }
-            
-            // Вычисляем challenge (e)
-            const e = BigInt('0x' + sha256(aVec.join(','))) % (2n ** B);
-            
-            // Вычисляем e_i для истинного сообщения
-            let eSum = eFalse.reduce((sum, val) => sum + val, 0n) % (2n ** B);
-            const eTrue = (e - eSum) % (2n ** B);
-            
-            // Вычисляем z_i для истинного сообщения
-            const zTrue = (w * modPow(r, eTrue, n)) % n;
-            
-            // Собираем полные векторы
+
+            // 7. Вычисляем challenge (chal)
+            const twoToB = 2n ** BigInt(B);
+            const hash = await sha256(aiVec);
+            const chal = BigInt('0x' + hash) % twoToB;
+
+            // 8. Вычисляем e_i для истинного сообщения
+            let eiSum = 0n;
+            for (const e of eiVec) {
+                eiSum = (eiSum + e) % twoToB;
+            }
+            const ei = (chal - eiSum + twoToB) % twoToB;
+
+            // 9. Вычисляем z_i для истинного сообщения
+            const riEi = modPow(r, ei, n);
+            const zi = (w * riEi) % n;
+
+            // 10. Собираем полные векторы e_vec и z_vec
             const eVec = [];
             const zVec = [];
-            falseIdx = 0;
-            for (let i = 0; i < validMessages.length; i++) {
+            j = 0;
+            for (let i = 0; i < numOfMessages; i++) {
                 if (i === trueIndex) {
-                    eVec.push(eTrue);
-                    zVec.push(zTrue);
+                    eVec.push(ei);
+                    zVec.push(zi);
                 } else {
-                    eVec.push(eFalse[falseIdx]);
-                    zVec.push(zFalse[falseIdx]);
-                    falseIdx++;
+                    eVec.push(eiVec[j]);
+                    zVec.push(ziVec[j]);
+                    j++;
                 }
             }
-            
+
             return {
-                ciphertext: ciphertext,
                 e_vec: eVec,
                 z_vec: zVec,
-                a_vec: aVec
+                a_vec: aiVec,
+                ciphertext: ciphertext,
+                valid_messages: [...validMessages],
+                n: n
             };
         }
+
+        // Вспомогательная функция для вычисления SHA-256
+        async function sha256(values) {
+            // Преобразуем массив BigInt в строки, как в C++
+            const strings = values.map(v => v.toString());
+            
+            // Соединяем строки через запятую, как в C++
+            const str = strings.join(',');
+            
+            // Кодируем строку в UTF-8
+            const encoder = new TextEncoder();
+            const data = encoder.encode(str);
+            
+            // Вычисляем хеш
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            
+            // Преобразуем в hex-строку
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            return hashHex;
+        }
+
         let proof;
-        function showConfirmation() {
+
+        async function showConfirmation() {
+            console.log("starting confirmation");
             const selectedOption = document.querySelector('input[name="vote"]:checked');
             if (!selectedOption) {
                 alert('Пожалуйста, выберите вариант ответа');
                 return;
             }
-            
+
             const selectedIndex = parseInt(selectedOption.value);
             const messageToEncrypt = voteVariants[selectedIndex];
-            
-            // Генерируем доказательство и шифруем голос
-            proof = generateProof(publicKey, voteVariants, messageToEncrypt);
+            console.log("messageToEncrypt: ", messageToEncrypt);
 
-            console.log(proof.ciphertext.toString());
-            
-            // Подготавливаем данные для отправки
-            document.getElementById('encryptedVote').value = proof.ciphertext.toString();
-            document.getElementById('proofE').value = JSON.stringify(proof.e_vec.map(e => e.toString()));
-            document.getElementById('proofZ').value = JSON.stringify(proof.z_vec.map(z => z.toString()));
-            document.getElementById('proofA').value = JSON.stringify(proof.a_vec.map(a => a.toString()));
-            
+            // Генерируем доказательство и шифруем голос
+            proof = await generateProof(publicKey, voteVariants, messageToEncrypt);
+
+            console.log("Ciphertext:", proof.ciphertext.toString());
+
             // Показываем модальное окно подтверждения
             document.getElementById('confirmationModal').style.display = 'flex';
         }
-        
+
         function hideConfirmation() {
             document.getElementById('confirmationModal').style.display = 'none';
         }
-        
+
         async function submitVote() {
+            if (!proof) {
+                console.error('Proof is not generated');
+                return;
+            }
+
+            console.log(proof.e_vec.map(e => e.toString()));
+
             const voteData = {
-                voting_id: {%voting_id%},  // Обратите внимание на двоеточие `:` вместо `=`
+                voting_id: voting_id,
                 encrypted_ballot: proof.ciphertext.toString(),
                 zkp_proof_e_vec: proof.e_vec.map(e => e.toString()),
                 zkp_proof_z_vec: proof.z_vec.map(z => z.toString()),
                 zkp_proof_a_vec: proof.a_vec.map(a => a.toString()),
             };
-            
+
             try {
                 const response = await fetch('/voting/submit', {
                     method: 'POST',
@@ -243,8 +379,11 @@
 
                 const data = await response.json();
                 console.log('Success:', data);
+                alert('Ваш голос успешно отправлен!');
+                hideConfirmation();
             } catch (error) {
                 console.error('Error:', error);
+                alert('Произошла ошибка при отправке голоса: ' + error.message);
             }
         }
     </script>

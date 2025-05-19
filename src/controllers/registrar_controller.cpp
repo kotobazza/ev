@@ -118,7 +118,7 @@ class RegistrarController : public drogon::HttpController<RegistrarController> {
                     
                     std::vector<BigNum> msgVariants;
                     for(size_t i = 0; i< eVec.size(); i++){
-                        msgVariants.push_back(BigNum(2).pow(BigNum(i)));
+                        msgVariants.push_back(BigNum(2).pow(BigNum(30*i)));
                     }
 
                     
