@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<%c++
+    auto login = @@.get<std::string>("login");
+    auto votings = @@.get<std::vector<std::pair<std::string, std::string>>>("votings");
+    // votings — вектор пар (id, название)
+%>
+<head>
+    <meta charset="UTF-8">
+    <title>Система EV</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+        }
+        .header {
+            background-color: #3399FF;
+            color: white;
+            padding: 1em;
+            font-size: 1.5em;
+        }
+        .container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        .left {
+            width: 30%;
+            padding: 2em;
+            border-right: 1px solid #ccc;
+        }
+        .right {
+            flex-grow: 1;
+            padding: 2em;
+        }
+        .voting {
+            margin-bottom: 1em;
+            padding: 1em;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+        }
+        .voting-title {
+            font-weight: bold;
+        }
+        .button {
+            display: inline-block;
+            margin-top: 0.5em;
+            padding: 0.5em 1em;
+            background-color: #3399FF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">Система EV</div>
+    <div class="container">
+        <div class="left">
+            <h2>Пользователь</h2>
+            <p><b>Логин:</b> <%c++ $$ << login; %></p>
+        </div>
+        <div class="right">
+            <h2>Доступные голосования</h2>
+            <%c++ for (const auto& v : votings) { %>
+                <div class="voting">
+                    <div class="voting-title">{%v.second%}</div>
+                    <a class="button" href="/votings/{%v.first%}">Участвовать</a>
+                </div>
+            <%c++ } %>
+        </div>
+    </div>
+</body>
+</html>
