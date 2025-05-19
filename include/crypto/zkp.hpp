@@ -62,11 +62,91 @@ private:
     }
 
 public:
+    // Оригинальный конструктор
     CorrectMessageProof(const std::vector<BigNum>& eVec, const std::vector<BigNum>& zVec,
                        const std::vector<BigNum>& aVec, const BigNum& cipher,
                        const std::vector<BigNum>& validMsgs, const BigNum& n)
         : e_vec(eVec), z_vec(zVec), a_vec(aVec), ciphertext(cipher),
           valid_messages(validMsgs), n(n), nn(n * n) {}
+    
+    // Новый конструктор с возможностью передачи r, zi, w
+    CorrectMessageProof(const BigNum& r, const std::vector<BigNum>& ziVec, const BigNum& w,
+                       const BigNum& n, const std::vector<BigNum>& validMessages,
+                       const BigNum& messageToEncrypt)
+        : n(n), nn(n * n), valid_messages(validMessages) {
+        // Проверка входных параметров
+        if (ziVec.size() != validMessages.size() - 1) {
+            throw std::invalid_argument("ziVec size must be validMessages.size() - 1");
+        }
+        
+        // Шифрование сообщения
+        BigNum g = n + BigNum(1);
+        ciphertext = (g.modExp(messageToEncrypt, nn) * r.modExp(n, nn)) % nn;
+        
+        // Вычисление u_i для каждого допустимого сообщения
+        std::vector<BigNum> uiVec;
+        for (const auto& m : validMessages) {
+            BigNum gm = (m * n + BigNum(1)) % nn;
+            BigNum gmInv = gm.modInverse(nn);
+            BigNum ui = (ciphertext * gmInv) % nn;
+            uiVec.push_back(ui);
+        }
+        
+        const int B = 256;
+        BigNum twoToB = BigNum(2).pow(BigNum(B));
+        
+        // Находим индекс истинного сообщения
+        size_t trueIndex = std::distance(validMessages.begin(),
+            std::find(validMessages.begin(), validMessages.end(), messageToEncrypt));
+        
+        // Генерация случайных e_j для всех сообщений, кроме истинного
+        std::vector<BigNum> eiVec;
+        for (size_t i = 0; i < validMessages.size() - 1; ++i) {
+            eiVec.push_back(randomInRange(BigNum(0), twoToB));
+        }
+        
+        // Вычисляем a_i для каждого сообщения
+        a_vec.clear();
+        size_t j = 0;
+        for (size_t i = 0; i < validMessages.size(); ++i) {
+            if (i == trueIndex) {
+                BigNum ai = w.modExp(n, nn);
+                a_vec.push_back(ai);
+            } else {
+                BigNum ziN = ziVec[j].modExp(n, nn);
+                BigNum uiEi = uiVec[i].modExp(eiVec[j], nn);
+                BigNum uiEiInv = uiEi.modInverse(nn);
+                BigNum ai = (ziN * uiEiInv) % nn;
+                a_vec.push_back(ai);
+                j++;
+            }
+        }
+        
+        // Вычисляем challenge (chal)
+        BigNum chal = computeDigest(a_vec) % twoToB;
+        
+        // Вычисляем e_i для истинного сообщения
+        BigNum eiSum = BigNum(0);
+        for (const auto& ei : eiVec) {
+            eiSum = (eiSum + ei) % twoToB;
+        }
+        BigNum ei = (chal - eiSum + twoToB) % twoToB;
+        
+        // Собираем полные векторы e_vec и z_vec
+        e_vec.clear();
+        z_vec.clear();
+        j = 0;
+        for (size_t i = 0; i < validMessages.size(); ++i) {
+            if (i == trueIndex) {
+                e_vec.push_back(ei);
+                z_vec.push_back((w * r.modExp(ei, n)) % n);
+            } else {
+                e_vec.push_back(eiVec[j]);
+                z_vec.push_back(ziVec[j]);
+                j++;
+            }
+        }
+    }
 
     static CorrectMessageProof prove(const BigNum& n, const std::vector<BigNum>& validMessages,
                                    const BigNum& messageToEncrypt) {
@@ -198,5 +278,7 @@ public:
     // Геттеры для доступа к данным
     const BigNum& getCiphertext() const { return ciphertext; }
     const std::vector<BigNum>& getValidMessages() const { return valid_messages; }
+    const std::vector<BigNum>& getE() const { return e_vec; }
+    const std::vector<BigNum>& getZ() const { return z_vec; }
+    const std::vector<BigNum>& getA() const { return a_vec; }
 };
-
