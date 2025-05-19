@@ -21,7 +21,6 @@ void TestController::handleDbTest(const HttpRequestPtr &req, std::function<void(
         return;
     }
 
-    // дальше твой код
     client->execSqlAsync("SELECT NOW()", [callback](const Result &r) {
         auto resp = HttpResponse::newHttpResponse();
         resp->setBody("PostgreSQL response: " + r[0]["now"].as<std::string>());
