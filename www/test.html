@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<%c++
+    auto login = @@.get<std::string>("login");
+    auto voting_title = @@.get<std::string>("voting_title");
+    auto voting_question = @@.get<std::string>("voting_question");
+    auto options = @@.get<std::vector<std::string>>("options");
+    auto options_amount = @@.get<int>("options_amount");
+    auto voting_id = @@.get<std::string>("voting_id");
+    auto crypto_parametr_n = @@.get<std::string>("crypto_parametr_n");
+%>
+<head>
+    <meta charset="UTF-8">
+    <title>Система EV</title>
+    <script src="https://unpkg.com/bn.js@5.2.0/lib/bn.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+        }
+        .header {
+            background-color: #3399FF;
+            color: white;
+            padding: 1em;
+            font-size: 1.5em;
+        }
+        .container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        .left {
+            width: 30%;
+            padding: 2em;
+            border-right: 1px solid #ccc;
+        }
+        .right {
+            flex-grow: 1;
+            padding: 2em;
+        }
+        .voting-form {
+            margin-bottom: 1em;
+            padding: 1em;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+        }
+        .voting-title {
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 0.5em;
+        }
+        .voting-question {
+            margin-bottom: 1em;
+            font-style: italic;
+        }
+        .option {
+            margin: 0.5em 0;
+            padding: 0.5em;
+        }
+        .button {
+            display: inline-block;
+            margin-top: 1em;
+            padding: 0.5em 1em;
+            background-color: #3399FF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2em;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .modal-buttons {
+            margin-top: 1em;
+        }
+        .modal-button {
+            padding: 0.5em 1em;
+            margin: 0 0.5em;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .confirm {
+            background-color: #3399FF;
+            color: white;
+            border: none;
+        }
+        .cancel {
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">Система EV</div>
+    <div class="container">
+        <div class="right">
+            <div class="voting-form">
+                <div class="voting-title">{%voting_title%}</div>
+                <div class="voting-question">{%voting_question%}</div>
+                
+                <form id="votingForm" action="/voting/subscribe" method="post">
+                    <input type="hidden" name="voting_id" value="{%voting_id%}">
+                    <input type="hidden" name="encrypted_vote" id="encryptedVote">
+                    <input type="hidden" name="proof_e" id="proofE">
+                    <input type="hidden" name="proof_z" id="proofZ">
+                    <input type="hidden" name="proof_a" id="proofA">
+                        <div class="option">
+                            <input type="radio" id="option{%i%}" name="vote" value="{%i%}">
+                            <label for="option"></label>
+                        </div>
+
+                    
+                    <button type="button" class="button" onclick="showConfirmation()">Отправить голос</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div id="confirmationModal" class="modal">
+        <div class="modal-content">
+            <p>Точно отправить голос?</p>
+            <div class="modal-buttons">
+                <button class="modal-button confirm" onclick="submitVote()">Да</button>
+                <button class="modal-button cancel" onclick="hideConfirmation()">Нет</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Инициализация параметров криптосистемы
+        const n = new BN('{%crypto_parametr_n%}');
+        const g = n.add(new BN(1));
+        const nn = n.mul(n);
+        const B = 256; // Параметр безопасности
+        
+        // Генерация вариантов голосования
+        const vote_variants = [];
+        for (let i = 0; i < 0; i++) {
+            vote_variants.push(new BN(2).pow(new BN(30*i)));
+        }
+        
+        // Функция для вычисления НОД
+        function gcd(a, b) {
+            while (!b.isZero()) {
+                const temp = b;
+                b = a.mod(b);
+                a = temp;
+            }
+            return a;
+        }
+        
+        // Функция для вычисления модульной инверсии
+        function modinv(a, m) {
+            // Используем расширенный алгоритм Евклида
+            let [old_r, r] = [a, m];
+            let [old_s, s] = [new BN(1), new BN(0)];
+            let [old_t, t] = [new BN(0), new BN(1)];
+            
+            while (!r.isZero()) {
+                const quotient = old_r.div(r);
+                
+                [old_r, r] = [r, old_r.sub(quotient.mul(r))];
+                [old_s, s] = [s, old_s.sub(quotient.mul(s))];
+                [old_t, t] = [t, old_t.sub(quotient.mul(t))];
+            }
+            
+            if (old_s.lt(new BN(0))) {
+                old_s = old_s.add(m);
+            }
+            
+            return old_s;
+        }
+        
+        // Функция L(x, n) = (x - 1) / n
+        function L(x, n) {
+            return x.sub(new BN(1)).div(n);
+        }
+        
+        // Функция для шифрования сообщения
+        function encrypt(m, r, g, n) {
+            // Проверка входных параметров
+            if (n.isZero() || n.isNeg()) {
+                throw new Error("Modulus n must be positive");
+            }
+            
+            const nn = n.mul(n);
+            
+            // Проверка, что r и n взаимно просты (gcd(r, n) = 1)
+            if (!gcd(r, n).eq(new BN(1))) {
+                throw new Error("r and n must be coprime");
+            }
+            
+            // Безопасное модульное возведение в степень
+            function safeModPow(base, exp, mod) {
+                if (mod.isZero()) {
+                    throw new Error("Modulus cannot be zero");
+                }
+                // Используем встроенный modPow если доступен
+                if (typeof base.modPow !== 'undefined') {
+                    return base.modPow(exp, mod);
+                }
+                // Или реализуем вручную
+                let result = new BN(1);
+                base = base.mod(mod);
+                while (exp.gt(new BN(0))) {
+                    if (exp.mod(new BN(2)).eq(new BN(1))) {
+                        result = result.mul(base).mod(mod);
+                    }
+                    base = base.mul(base).mod(mod);
+                    exp = exp.div(new BN(2));
+                }
+                return result;
+            }
+            
+            const gm = safeModPow(g, m, nn);
+            const rn = safeModPow(r, n, nn);
+            
+            return gm.mul(rn).mod(nn);
+        }
+        
+        // Функция для вычисления хеша (digest)
+        function computeDigest(values) {
+            const h = sha256.create();
+            values.forEach(val => {
+                h.update(val.toString());
+            });
+            return new BN(h.hex(), 16);
+        }
+        
+        // Генерация доказательства корректности сообщения
+        function generateProof(n, valid_messages, message_to_encrypt) {          
+            // Проверка входных параметров
+            if (n.isZero() || n.isNeg()) {
+                throw new Error("Invalid modulus n");
+            }
+            
+            const nn = n.mul(n);
+            const num_of_messages = valid_messages.length;
+            
+            // Генерация случайного r (взаимно простого с n)
+            let r;
+            let attempts = 0;
+            const maxAttempts = 100;
+            do {
+                if (attempts++ > maxAttempts) {
+                    throw new Error("Failed to find suitable r after " + maxAttempts + " attempts");
+                }
+                r = new BN(2).add(new BN(Math.floor(Math.random() * (n.sub(new BN(2)).toNumber()))));
+            } while (!gcd(r, n).eq(new BN(1)));
+            
+            // Шифрование сообщения с обработкой ошибок
+            let ciphertext;
+            try {
+                ciphertext = encrypt(message_to_encrypt, r, g, n);
+            } catch (e) {
+                console.error("Encryption failed:", e);
+                throw new Error("Encryption failed: " + e.message);
+            }
+            
+            // Шифрование сообщения
+            ciphertext = encrypt(message_to_encrypt, r, g, n);
+            
+            // Вычисление u_i для каждого допустимого сообщения
+            const ui_vec = [];
+            for (const m of valid_messages) {
+                const gm = m.mul(n).add(new BN(1)).mod(nn);
+                const gm_inv = modinv(gm, nn);
+                const ui = ciphertext.mul(gm_inv).mod(nn);
+                ui_vec.push(ui);
+            }
+            
+            // Генерация случайных e_j и z_j для всех сообщений, кроме истинного
+            const ei_vec = [];
+            const zi_vec = [];
+            for (let i = 0; i < num_of_messages - 1; i++) {
+                ei_vec.push(new BN(Math.floor(Math.random() * Math.pow(2, B))));
+                zi_vec.push(new BN(2).add(new BN(Math.floor(Math.random() * (n.sub(new BN(2)).toNumber())))));
+            }
+            
+            // Генерация случайного w
+            const w = new BN(2).add(new BN(Math.floor(Math.random() * (n.sub(new BN(2)).toNumber()))));
+            
+            // Находим индекс истинного сообщения
+            const true_index = valid_messages.findIndex(m => m.eq(message_to_encrypt));
+            
+            // Вычисляем a_i для каждого сообщения
+            const ai_vec = [];
+            let j = 0;
+            for (let i = 0; i < num_of_messages; i++) {
+                if (i === true_index) {
+                    ai_vec.push(w.pow(n).mod(nn));
+                } else {
+                    const zi_n = zi_vec[j].pow(n).mod(nn);
+                    const ui_ei = ui_vec[i].pow(ei_vec[j]).mod(nn);
+                    const ui_ei_inv = modinv(ui_ei, nn);
+                    ai_vec.push(zi_n.mul(ui_ei_inv).mod(nn));
+                    j++;
+                }
+            }
+            
+            // Вычисляем challenge (chal)
+            const two_to_B = new BN(2).pow(new BN(B));
+            const chal = computeDigest(ai_vec).mod(two_to_B);
+            
+            // Вычисляем e_i для истинного сообщения
+            let ei_sum = new BN(0);
+            for (const ei of ei_vec) {
+                ei_sum = ei_sum.add(ei).mod(two_to_B);
+            }
+            const ei = chal.sub(ei_sum).mod(two_to_B);
+            
+            // Вычисляем z_i для истинного сообщения
+            const ri_ei = r.pow(ei).mod(n);
+            const zi = w.mul(ri_ei).mod(n);
+            
+            // Собираем полные векторы e_vec и z_vec
+            const e_vec = [];
+            const z_vec = [];
+            j = 0;
+            for (let i = 0; i < num_of_messages; i++) {
+                if (i === true_index) {
+                    e_vec.push(ei);
+                    z_vec.push(zi);
+                } else {
+                    e_vec.push(ei_vec[j]);
+                    z_vec.push(zi_vec[j]);
+                    j++;
+                }
+            }
+            
+            return {
+                e_vec: e_vec,
+                z_vec: z_vec,
+                a_vec: ai_vec,
+                ciphertext: ciphertext
+            };
+        }
+        
+        function showConfirmation() {
+            const selectedOption = document.querySelector('input[name="vote"]:checked');
+            if (!selectedOption) {
+                alert('Пожалуйста, выберите вариант ответа');
+                return;
+            }
+            
+            // Получаем выбранный вариант
+            const selectedIndex = parseInt(selectedOption.value);
+            const message_to_encrypt = vote_variants[selectedIndex];
+            
+            // Генерируем доказательство и шифруем голос
+            const proof = generateProof(n, vote_variants, message_to_encrypt);
+            
+            // Сохраняем данные для отправки
+            document.getElementById('encryptedVote').value = proof.ciphertext.toString();
+            document.getElementById('proofE').value = JSON.stringify(proof.e_vec.map(e => e.toString()));
+            document.getElementById('proofZ').value = JSON.stringify(proof.z_vec.map(z => z.toString()));
+            document.getElementById('proofA').value = JSON.stringify(proof.a_vec.map(a => a.toString()));
+            
+            // Показываем модальное окно подтверждения
+            document.getElementById('confirmationModal').style.display = 'flex';
+        }
+        
+        function hideConfirmation() {
+            document.getElementById('confirmationModal').style.display = 'none';
+        }
+        
+        function submitVote() {
+            document.getElementById('votingForm').submit();
+        }
+    </script>
+    
+</body>
+</html>
