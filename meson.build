@@ -9,6 +9,8 @@ deps = [
   dependency('zlib'),
   dependency('threads'),
   dependency('trantor'),
+  dependency('jwt-cpp'),
+  dependency('libsodium'),
 ]
 
 # Добавляем GTest (будет найден через Conan)
@@ -73,7 +75,12 @@ endif
 
 executable_sources = files([
   'src/main.cpp',
-  'src/controllers/test_controller.cpp'
+  'src/controllers/test_controller.cpp',
+  'src/controllers/user_controller.cpp',
+  'src/controllers/auth_controller.cpp',
+  'src/controllers/voting_controller.cpp',
+  'src/controllers/registrar_controller.cpp',
+  'src/controllers/tally_controller.cpp',
 ])
 
 executable('drogon_demo',

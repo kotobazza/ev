@@ -17,6 +17,9 @@ class DrogonAppCustom(ConanFile):
     def requirements(self):
         self.requires("drogon/1.9.10")
         self.requires("gtest/1.16.0")
+        self.requires("jwt-cpp/0.7.1")
+        self.requires("libsodium/1.0.20")
+        self.requires("nlohmann_json/3.12.0")
 
     def generate(self):
         env = VirtualRunEnv(self)
