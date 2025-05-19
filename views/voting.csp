@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<%c++
+    auto login = @@.get<std::string>("login");
+    auto voting_title = @@.get<std::string>("voting_title");
+    auto voting_question = @@.get<std::string>("voting_question");
+    auto options = @@.get<std::vector<std::string>>("options");
+    auto options_amount = @@.get<int>("options_amount");
+    auto voting_id = @@.get<std::string>("voting_id");
+    auto crypto_parametr_n = @@.get<std::string>("crypto_parametr_n");
+%>
+<head>
+    <meta charset="UTF-8">
+    <title>Система EV</title>
+    <!-- Заменяем bn.js на paillier-bigint -->
+    <script src="https://cdn.jsdelivr.net/npm/paillier-bigint@latest/dist/bundle.iife.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <link rel="stylesheet" href="/main.css">
+</head>
+<body>
+    <div class="header">Система EV</div>
+    <div class="container">
+        <div class="right">
+            <div class="voting-form">
+                <div class="voting-title">{%voting_title%}</div>
+                <div class="voting-question">{%voting_question%}</div>
+                
+                <form id="votingForm" action="/voting/subscribe" method="post">
+                    <input type="hidden" name="voting_id" value="{%voting_id%}">
+                    <input type="hidden" name="encrypted_vote" id="encryptedVote">
+                    <input type="hidden" name="proof_e" id="proofE">
+                    <input type="hidden" name="proof_z" id="proofZ">
+                    <input type="hidden" name="proof_a" id="proofA">
+                    <%c++ for (size_t i = 0; i < options.size(); ++i) { %>
+                        <div class="option">
+                            <input type="radio" id="option{%i%}" name="vote" value="{%i%}">
+                            <label for="option{%i%}">{%options[i]%}</label>
+                        </div>
+                    <%c++ } %>
+                    
+                    <button type="button" class="button" onclick="showConfirmation()">Отправить голос</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div id="confirmationModal" class="modal">
+        <div class="modal-content">
+            <p>Точно отправить голос?</p>
+            <div class="modal-buttons">
+                <button class="modal-button confirm" onclick="submitVote()">Да</button>
+                <button class="modal-button cancel" onclick="hideConfirmation()">Нет</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Инициализация публичного ключа Paillier
+        const publicKey = {
+            n: BigInt('{%crypto_parametr_n%}'),
+            g: BigInt('{%crypto_parametr_n%}') + 1n // Стандартное значение g = n + 1
+        };
+
+        // Генерация вариантов голосования (используем большие числа)
+        const voteVariants = [];
+        for (let i = 0; i < {%options_amount%}; i++) {
+            voteVariants.push(modPow(2n, 30n * BigInt(i), publicKey.n ** 2n));
+        }
+
+        // Функция для генерации случайного BigInt в диапазоне [1, max)
+        function randomBigInt(max) {
+            const bytesNeeded = Math.ceil(max.toString(2).length / 8);
+            let randomValue;
+            
+            do {
+                const randomBytes = new Uint8Array(bytesNeeded);
+                crypto.getRandomValues(randomBytes);
+                randomValue = BigInt('0x' + Array.from(randomBytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('')) % max;
+            } while (randomValue === 0n);
+            
+            return randomValue;
+        }
+
+        // Функция для модульного возведения в степень
+        function modPow(base, exponent, modulus) {
+            if (modulus === 1n) return 0n;
+            let result = 1n;
+            base = base % modulus;
+            while (exponent > 0n) {
+                if (exponent % 2n === 1n) {
+                    result = (result * base) % modulus;
+                }
+                exponent = exponent >> 1n;
+                base = (base * base) % modulus;
+            }
+            return result;
+        }
+
+        function encryptPaillier(m, publicKey) {
+            // 1. Выбираем случайное r ∈ Z*_n
+            let r;
+            do {
+                r = randomBigInt(publicKey.n);
+            } while (r === 0n || r === 1n); // Убедимся, что r ≠ 0 и r ≠ 1
+
+            // 2. Вычисляем шифротекст: c = (g^m mod n²) * (r^n mod n²) mod n²
+            const n2 = publicKey.n ** 2n;
+            const gm = modPow(publicKey.g, m, n2);
+            const rn = modPow(r, publicKey.n, n2);
+            const ciphertext = (gm * rn) % n2;
+            
+            return {
+                ciphertext: ciphertext,
+                r: r // Сохраняем r для доказательства
+            };
+        }
+
+        // Генерация доказательства корректности сообщения (адаптированная версия)
+        function generateProof(publicKey, validMessages, messageToEncrypt) {
+            const n = publicKey.n;
+            const n2 = n ** 2n;
+            const B = 256n; // Параметр безопасности
+            
+            // Шифруем сообщение
+            const { ciphertext, r } = encryptPaillier(messageToEncrypt, publicKey);
+            
+            // Находим индекс истинного сообщения
+            const trueIndex = validMessages.findIndex(m => m === messageToEncrypt);
+            
+            // Генерируем случайные значения для ложных утверждений
+            const eFalse = [];
+            const zFalse = [];
+            for (let i = 0; i < validMessages.length - 1; i++) {
+                eFalse.push(randomBigInt(2n ** B));
+                zFalse.push(randomBigInt(n));
+            }
+            
+            // Генерируем случайное w
+            const w = randomBigInt(n);
+            
+            // Вычисляем a_i для каждого сообщения
+            const aVec = [];
+            let falseIdx = 0;
+            for (let i = 0; i < validMessages.length; i++) {
+                if (i === trueIndex) {
+                    let val = modPow(w, n, n2);
+                    aVec.push(val);
+                } else {
+                    const mDiff = validMessages[i] - messageToEncrypt;
+                    const ui = (ciphertext * modPow(publicKey.g, mDiff * (n - 1n), n2)) % n2;
+                    const ai = (modPow(zFalse[falseIdx], n, n2) * modPow(ui, eFalse[falseIdx], n2)) % n2;
+                    aVec.push(ai);
+                    falseIdx++;
+                }
+            }
+            
+            // Вычисляем challenge (e)
+            const e = BigInt('0x' + sha256(aVec.join(','))) % (2n ** B);
+            
+            // Вычисляем e_i для истинного сообщения
+            let eSum = eFalse.reduce((sum, val) => sum + val, 0n) % (2n ** B);
+            const eTrue = (e - eSum) % (2n ** B);
+            
+            // Вычисляем z_i для истинного сообщения
+            const zTrue = (w * modPow(r, eTrue, n)) % n;
+            
+            // Собираем полные векторы
+            const eVec = [];
+            const zVec = [];
+            falseIdx = 0;
+            for (let i = 0; i < validMessages.length; i++) {
+                if (i === trueIndex) {
+                    eVec.push(eTrue);
+                    zVec.push(zTrue);
+                } else {
+                    eVec.push(eFalse[falseIdx]);
+                    zVec.push(zFalse[falseIdx]);
+                    falseIdx++;
+                }
+            }
+            
+            return {
+                ciphertext: ciphertext,
+                e_vec: eVec,
+                z_vec: zVec,
+                a_vec: aVec
+            };
+        }
+        let proof;
+        function showConfirmation() {
+            const selectedOption = document.querySelector('input[name="vote"]:checked');
+            if (!selectedOption) {
+                alert('Пожалуйста, выберите вариант ответа');
+                return;
+            }
+            
+            const selectedIndex = parseInt(selectedOption.value);
+            const messageToEncrypt = voteVariants[selectedIndex];
+            
+            // Генерируем доказательство и шифруем голос
+            proof = generateProof(publicKey, voteVariants, messageToEncrypt);
+
+            console.log(proof.ciphertext.toString());
+            
+            // Подготавливаем данные для отправки
+            document.getElementById('encryptedVote').value = proof.ciphertext.toString();
+            document.getElementById('proofE').value = JSON.stringify(proof.e_vec.map(e => e.toString()));
+            document.getElementById('proofZ').value = JSON.stringify(proof.z_vec.map(z => z.toString()));
+            document.getElementById('proofA').value = JSON.stringify(proof.a_vec.map(a => a.toString()));
+            
+            // Показываем модальное окно подтверждения
+            document.getElementById('confirmationModal').style.display = 'flex';
+        }
+        
+        function hideConfirmation() {
+            document.getElementById('confirmationModal').style.display = 'none';
+        }
+        
+        async function submitVote() {
+            const voteData = {
+                voting_id: {%voting_id%},  // Обратите внимание на двоеточие `:` вместо `=`
+                encrypted_ballot: proof.ciphertext.toString(),
+                zkp_proof_e_vec: proof.e_vec.map(e => e.toString()),
+                zkp_proof_z_vec: proof.z_vec.map(z => z.toString()),
+                zkp_proof_a_vec: proof.a_vec.map(a => a.toString()),
+            };
+            
+            try {
+                const response = await fetch('/voting/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // для отправки куков
+                    body: JSON.stringify(voteData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                console.log('Success:', data);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
