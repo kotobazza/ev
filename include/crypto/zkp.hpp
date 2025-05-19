@@ -148,6 +148,68 @@ public:
         }
     }
 
+    CorrectMessageProof(const BigNum& r, const std::vector<BigNum>& ziVec, const std::vector<BigNum>& eiVec, const BigNum& w,
+                       const BigNum& encrypted_mesg, size_t index, const std::vector<BigNum>& validMsgs,
+                       const BigNum& modulus_n)
+        : ciphertext(encrypted_mesg), valid_messages(validMsgs), n(modulus_n), nn(modulus_n * modulus_n) {
+        // Проверяем, что количество zi соответствует количеству сообщений минус 1
+
+        BigNum twoToB = BigNum(2).pow(BigNum(256)); // Параметр безопасности B=256
+        BigNum g = n + BigNum(1);  // Стандартное значение g для Paillier
+
+        // Вычисляем u_i для каждого допустимого сообщения
+        std::vector<BigNum> uiVec;
+        for (const auto& m : valid_messages) {
+            BigNum gm = (m * n + BigNum(1)) % nn;
+            BigNum gmInv = gm.modInverse(nn);
+            BigNum ui = (ciphertext * gmInv) % nn;
+            uiVec.push_back(ui);
+        }
+
+
+
+        // Вычисляем a_i для каждого сообщения
+        a_vec.resize(valid_messages.size());
+        e_vec.resize(valid_messages.size());
+        z_vec.resize(valid_messages.size());
+
+        // Находим индекс истинного сообщения (которое было зашифровано)
+        size_t trueIndex = index;
+
+        // Заполняем векторы e_vec и z_vec
+        size_t j = 0;
+        for (size_t i = 0; i < valid_messages.size(); ++i) {
+            if (i == trueIndex) {
+                // Для истинного сообщения
+                BigNum ai = w.modExp(n, nn);
+                a_vec[i] = ai;
+
+                // Вычисляем e_i для истинного сообщения
+                BigNum eiSum = BigNum(0);
+                for (const auto& ei : eiVec) {
+                    eiSum = (eiSum + ei) % twoToB;
+                }
+
+                //ОШИБКА ВОТ ЗДЕСЯ
+                BigNum chal = computeDigest(a_vec) % twoToB;
+                
+                BigNum ei = (chal - eiSum + twoToB) % twoToB;
+                e_vec[i] = ei;
+
+                // Вычисляем z_i для истинного сообщения
+                BigNum riEi = r.modExp(ei, n);
+                BigNum zi = (w * riEi) % n;
+                z_vec[i] = zi;
+            } else {
+                // Для других сообщений
+                a_vec[i] = (ziVec[j].modExp(n, nn) * uiVec[i].modExp(eiVec[j], nn).modInverse(nn)) % nn;
+                e_vec[i] = eiVec[j];
+                z_vec[i] = ziVec[j];
+                j++;
+            }
+        }
+    }
+
     static CorrectMessageProof prove(const BigNum& n, const std::vector<BigNum>& validMessages,
                                    const BigNum& messageToEncrypt) {
         BigNum nn = n * n;
