@@ -120,7 +120,9 @@ TEST(BlindSignature, SimpleTest) {
     }
 }
 
-TEST(ZKP, SimpleTest) {
+
+
+TEST(ZKP, SimpleTest2) {
     try {
         // Генерация ключей
         BigNum p("838382000974237847921957342377847823774311");
