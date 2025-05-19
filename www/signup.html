@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Регистрация</title>
+</head>
+
+<body>
+    <h1>Регистрация</h1>
+    <form action="/user/signup" method="POST">
+        <label>Логин: <input type="text" name="login" required></label><br />
+        <label>Пароль: <input type="password" name="password" required></label><br />
+        <label>Подтвердите пароль: <input type="password" name="password_confirm" required></label><br />
+        <button type="submit">Зарегистрироваться</button>
+    </form>
+    <p>Уже есть аккаунт? <a href="/user/signin">Войти</a></p>
+</body>
+
+</html>
