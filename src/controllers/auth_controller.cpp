@@ -1,3 +1,5 @@
+#include "auth_controller.hpp"
+
 #include <drogon/Cookie.h>
 #include <drogon/drogon.h>
 #include <drogon/orm/DbClient.h>
@@ -11,23 +13,72 @@
 using namespace drogon;
 using traits = jwt::traits::open_source_parsers_jsoncpp;
 
-class UserController : public drogon::HttpController<UserController> {
-   public:
-    METHOD_LIST_BEGIN
-    ADD_METHOD_TO(UserController::signinPage, "/user/signin", Get);
-    ADD_METHOD_TO(UserController::submitLogin, "/user/submit", Post);
-    ADD_METHOD_TO(UserController::signupPage, "/user/signup", Get);
-    ADD_METHOD_TO(UserController::submitSignup, "/user/signup", Post);
-    METHOD_LIST_END
+AuthController::AuthController() {
+    if (sodium_init() < 0) {
+        throw std::runtime_error("Failed to initialize libsodium");
+    }
+}
 
-    UserController() {
-        if (sodium_init() < 0) {
-            throw std::runtime_error("Failed to initialize libsodium");
-        }
+void AuthController::handleSignin(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    LOG_INFO << "requested Signin page";
+
+    // Ситуация - пользователь вышел из системы или у него просто нет токена входа, и ему надо просто войти в систему
+
+    auto resp = HttpResponse::newFileResponse("/login.html");
+    resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
+    callback(resp);
+}
+
+void AuthController::handleSignup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    LOG_INFO << "requested Signup page";
+
+    auto resp = HttpResponse::newFileResponse("/signup.html");
+    resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
+    callback(resp);
+}
+
+void AuthController::handleSubmitLogin(const HttpRequestPtr& req,
+                                       std::function<void(const HttpResponsePtr&)>&& callback) {
+    LOG_INFO << "asked for auth process submit";
+
+    auto login = req->getParameter("login");
+    auto password = req->getParameter("password");
+}
+
+void AuthController::handleSubmitRegister(const HttpRequestPtr& req,
+                                          std::function<void(const HttpResponsePtr&)>&& callback) {
+    LOG_INFO << "asked for auth process submit";
+
+    auto login = req->getParameter("login");
+    auto password = req->getParameter("password");
+    auto password_confirm = req->getParameter("password_confirm");
+
+    if (login.empty() || password.empty() || password_confirm.empty()) {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setBody("Ошибка: все поля обязательны");
+        callback(resp);
+        return;
     }
 
+    if (password != password_confirm) {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k400BadRequest);
+        resp->setBody("Ошибка: пароли не совпадают");
+        callback(resp);
+        return;
+    }
+
+    auto client = app().getDbClient();
+
+    client->execSqlAsync()//вот это место нужно смотреть. как работает эта функция
+}
+
+class UserController : public drogon::HttpController<UserController> {
+   public:
     // Страница входа
     void signinPage(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+        LOG_INFO << "asked for signin page";
         // Сначала пытаемся получить cookie с токеном
         auto cookies = req->cookies();
         auto it = cookies.find("access_token");
@@ -69,6 +120,7 @@ class UserController : public drogon::HttpController<UserController> {
 
     // Обработка входа
     void submitLogin(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+        LOG_INFO << "asked for submit login";
         auto login = req->getParameter("login");
         auto password = req->getParameter("password");
 
@@ -158,6 +210,7 @@ class UserController : public drogon::HttpController<UserController> {
 
     // Страница регистрации
     void signupPage(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+        LOG_INFO << "asked for signup page";
         auto resp = HttpResponse::newFileResponse("../www/signup.html");
         resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
         callback(resp);
@@ -165,6 +218,7 @@ class UserController : public drogon::HttpController<UserController> {
 
     // Обработка регистрации
     void submitSignup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+        LOG_INFO << "asked for submit signup";
         auto login = req->getParameter("login");
         auto password = req->getParameter("password");
         auto password_confirm = req->getParameter("password_confirm");

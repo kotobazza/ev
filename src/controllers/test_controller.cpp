@@ -11,6 +11,7 @@ using namespace drogon::orm;
 
 void TestController::handleDbTest(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback)
 {
+    LOG_INFO << "asked for dbtest page";
     auto client = app().getDbClient("default");
     if (!client)
     {
@@ -36,6 +37,7 @@ void TestController::handleDbTest(const HttpRequestPtr &req, std::function<void(
 
 void TestController::handleRedisTest(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback)
 {
+    LOG_INFO << "asked for redistest page";
     auto redis = app().getRedisClient("default");
 
     redis->execCommandAsync(
@@ -57,6 +59,7 @@ void TestController::handleRedisTest(const HttpRequestPtr &req, std::function<vo
 
 void TestController::handleHello(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback)
 {
+    LOG_INFO << "asked for hello page";
     auto resp = HttpResponse::newHttpResponse();
     resp->setBody("Hello from TestController");
     callback(resp);
