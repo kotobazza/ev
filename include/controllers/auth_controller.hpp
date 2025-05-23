@@ -5,6 +5,8 @@ using namespace drogon;
 
 class AuthController : public drogon::HttpController<AuthController> {
    public:
+    AuthController();
+
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(AuthController::handleSignin, "/user/signin", Get);
     ADD_METHOD_TO(AuthController::handleSubmitLogin, "/user/login/submit", Post);
@@ -16,5 +18,4 @@ class AuthController : public drogon::HttpController<AuthController> {
     void handleSignup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void handleSubmitLogin(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void handleSubmitRegister(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
-    
 };
