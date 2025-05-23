@@ -1,3 +1,5 @@
 build/
 .vscode/
 builddir/
+compile_commands.json
+.cache/
