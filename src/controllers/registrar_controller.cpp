@@ -7,7 +7,7 @@
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/open-source-parsers-jsoncpp/traits.h>
 #include <sodium.h>  // libsodium
-#include "bignum.hpp"
+#include "bigint.hpp"
 #include "zkp.hpp"
 
 using namespace drogon;
@@ -84,7 +84,7 @@ class RegistrarController : public drogon::HttpController<RegistrarController> {
                     Json::Value zkpProofZ = jsonData["zkp_proof_z_vec"];
                     Json::Value zkpProofA = jsonData["zkp_proof_a_vec"];
 
-                    std::vector<BigNum> eVec, aVec, zVec;
+                    std::vector<BigInt> eVec, aVec, zVec;
 
                     // Выводим полученные данные (в реальном приложении здесь будет обработка)
                     std::cout << "Received vote data:" << std::endl;
@@ -94,22 +94,22 @@ class RegistrarController : public drogon::HttpController<RegistrarController> {
                     std::cout << "ZKP Proof E:" << std::endl;
                     for (const auto& num : zkpProofE) {
                         std::cout << num.asString() << std::endl;
-                        eVec.push_back(BigNum::fromBase64(num.asString()));
+                        eVec.push_back(BigInt::fromBase64(num.asString()));
                     }
 
                     std::cout << "ZKP Proof Z:" << std::endl;
                     for (const auto& num : zkpProofZ) {
                         std::cout << num.asString() << std::endl;
-                        zVec.push_back(BigNum::fromBase64(num.asString()));
+                        zVec.push_back(BigInt::fromBase64(num.asString()));
                     }
 
                     std::cout << "ZKP Proof A:" << std::endl;
                     for (const auto& num : zkpProofA) {
                         std::cout << num.asString() << std::endl;
-                        aVec.push_back(BigNum::fromBase64(num.asString()));
+                        aVec.push_back(BigInt::fromBase64(num.asString()));
                     }
 
-                    BigNum n = BigNum::fromString(
+                    BigInt n = BigInt::fromString(
                         "3808960098930485608648231881072338589639824039968925156773850102143996807467302518563771838677"
                         "3707987978862422676776001504944327321619767842592695585112395168004591043832521018334144652551"
                         "9732616495389941656774999338209121700543549400831719887789241885970910418134252817104741423771"
@@ -125,12 +125,12 @@ class RegistrarController : public drogon::HttpController<RegistrarController> {
                         "1460437192841504074323578110000830029934258704211681936207762622919306759388206295653058823691"
                         "05698657203");
 
-                    std::vector<BigNum> msgVariants;
+                    std::vector<BigInt> msgVariants;
                     for (size_t i = 0; i < eVec.size(); i++) {
-                        msgVariants.push_back(BigNum(2).pow(BigNum(30 * i)));
+                        msgVariants.push_back(BigInt(2).pow(BigInt(30 * i)));
                     }
 
-                    CorrectMessageProof scheme(eVec, zVec, aVec, BigNum::fromBase64(encryptedBallot), msgVariants, n);
+                    CorrectMessageProof scheme(eVec, zVec, aVec, BigInt::fromBase64(encryptedBallot), msgVariants, n);
 
                     if (scheme.verify()) {
                         auto resp = HttpResponse::newHttpJsonResponse(Json::Value(true));

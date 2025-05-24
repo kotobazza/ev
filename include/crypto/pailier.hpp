@@ -3,34 +3,34 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "bignum.hpp"
+#include "bigint.hpp"
 
 using namespace std;
 
-BigNum L(const BigNum& x, const BigNum& n) {
-    return (x - BigNum(1)) / n;
+BigInt L(const BigInt& x, const BigInt& n) {
+    return (x - BigInt(1)) / n;
 }
 
-tuple<BigNum, BigNum, BigNum> generate_keys(const BigNum& p, const BigNum& q) {
-    BigNum n = p * q;
-    BigNum lambda = lcm(p - BigNum(1), q - BigNum(1));
-    BigNum g = n + BigNum(1);
+tuple<BigInt, BigInt, BigInt> generate_keys(const BigInt& p, const BigInt& q) {
+    BigInt n = p * q;
+    BigInt lambda = lcm(p - BigInt(1), q - BigInt(1));
+    BigInt g = n + BigInt(1);
     return {n, lambda, g};
 }
 
-BigNum encrypt(const BigNum& m, const BigNum& r, const BigNum& g, const BigNum& n) {
-    BigNum nn = n * n;
+BigInt encrypt(const BigInt& m, const BigInt& r, const BigInt& g, const BigInt& n) {
+    BigInt nn = n * n;
     return (g.modExp(m, nn) * r.modExp(n, nn)) % nn;
 }
 
-BigNum decrypt(const BigNum& c, const BigNum& g, const BigNum& lambda, const BigNum& n) {
-    BigNum nn = n * n;
-    BigNum numerator = L(c.modExp(lambda, nn), n);
-    BigNum denominator = L(g.modExp(lambda, nn), n);
+BigInt decrypt(const BigInt& c, const BigInt& g, const BigInt& lambda, const BigInt& n) {
+    BigInt nn = n * n;
+    BigInt numerator = L(c.modExp(lambda, nn), n);
+    BigInt denominator = L(g.modExp(lambda, nn), n);
     return (numerator * denominator.modInverse(n)) % n;
 }
 
-BigNum compute_digest(const vector<BigNum>& values) {
+BigInt compute_digest(const vector<BigInt>& values) {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
         // Обработка ошибки выделения памяти
@@ -64,5 +64,5 @@ BigNum compute_digest(const vector<BigNum>& values) {
         ss << hex << setw(2) << setfill('0') << (int)hash[i];
     }
 
-    return BigNum::fromString(ss.str());
+    return BigInt::fromString(ss.str());
 }

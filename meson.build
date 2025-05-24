@@ -83,6 +83,7 @@ executable_sources = files(
   'src/controllers/test_controller.cpp',
   'src/controllers/user_controller.cpp',
   'src/controllers/voting_controller.cpp',
+  'src/crypto/bigint.cpp',
   'src/main.cpp',
 )
 

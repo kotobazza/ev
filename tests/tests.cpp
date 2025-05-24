@@ -1,26 +1,26 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "bignum.hpp"
+#include "bigint.hpp"
 #include "blind_signature.hpp"
 #include "merklie_tree.hpp"
 #include "pailier.hpp"
 #include "zkp.hpp"
 
-TEST(MultiprecisionArithmetic, IsBigNumClassWorks) {
-    BigNum a = BigNum::fromString("111");
+TEST(MultiprecisionArithmetic, IsBigIntClassWorks) {
+    BigInt a = BigInt::fromString("111");
     EXPECT_EQ(a.toString(), "111");
 }
 
 TEST(MultiprecisionArithmetic, SimpleMiltiprecisionOperations) {
-    BigNum a = BigNum::fromString("123456789012345678901234567890");
-    BigNum b = BigNum::fromString("98765432109876543210");
+    BigInt a = BigInt::fromString("123456789012345678901234567890");
+    BigInt b = BigInt::fromString("98765432109876543210");
 
-    BigNum sum = a + b;
-    BigNum diff = a - b;
-    BigNum prod = a * b;
-    BigNum quot = a / b;
-    BigNum mod = a % b;
+    BigInt sum = a + b;
+    BigInt diff = a - b;
+    BigInt prod = a * b;
+    BigInt quot = a / b;
+    BigInt mod = a % b;
 
     EXPECT_EQ(sum.toString(), "123456789111111111011111111100");
     EXPECT_EQ(diff.toString(), "123456788913580246791358024680");
@@ -30,44 +30,44 @@ TEST(MultiprecisionArithmetic, SimpleMiltiprecisionOperations) {
 }
 
 TEST(PailierCryptography, SimpleUsecase) {
-    BigNum p = BigNum::fromString("838382000974237847921957342377847823774311");
-    BigNum q = BigNum::fromString("113011");
+    BigInt p = BigInt::fromString("838382000974237847921957342377847823774311");
+    BigInt q = BigInt::fromString("113011");
 
     auto [n, lambda_val, g] = generate_keys(p, q);
 
-    std::vector<BigNum> votes{
-        BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)),
-        BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)),
+    std::vector<BigInt> votes{
+        BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)),
+        BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)),
     };
 
-    std::vector<BigNum> encrypted_votes{};
+    std::vector<BigInt> encrypted_votes{};
 
     for (auto m : votes) {
-        encrypted_votes.push_back(encrypt(m, BigNum(113), g, n));
+        encrypted_votes.push_back(encrypt(m, BigInt(113), g, n));
     }
 
-    BigNum encc{1};
-    BigNum t{0};
-    BigNum nn = n * n;
+    BigInt encc{1};
+    BigInt t{0};
+    BigInt nn = n * n;
 
     for (auto i : encrypted_votes) {
         encc = (encc * i) % nn;
     }
 
-    BigNum decsum = decrypt(encc, g, lambda_val, n);
+    BigInt decsum = decrypt(encc, g, lambda_val, n);
 
     EXPECT_EQ(decsum.toString(), "5368709120");
 }
 
 TEST(PailierCryptography, HardLoad) {
-    BigNum p = BigNum::fromString(
+    BigInt p = BigInt::fromString(
         "16404039174607693836360866480585614484544715780109420999587841911243314805066566626825650726886035765629970390"
         "89549681643050556549635257358690795777209850042468604069376784877781254003881410574446450853154325269463221049"
         "72494219200259177998517848835296770228674922695940834164143133401844103862534975584134053728686639397514762467"
         "32526677910766901702597914138830472395078921453562041777548374278654042973619250257136324320032842868953709957"
         "50844760980408776681372215036107346394928561229511548021683235453579706370411682264891424122924645293826133434"
         "7254820854775661531314072850103643102893024731790022431913878152973");
-    BigNum q = BigNum::fromString(
+    BigInt q = BigInt::fromString(
         "23219647663524783783061952253556607743994047212392754088058700334758166821038715748297093329096091346687489206"
         "95324558663385920747230458501903508583147162181811408006545125413126853731651034318627210953261740426151770560"
         "76238745310453632149821843456762026205270743082992379696423750382725025494340716199685885921910799273608419681"
@@ -77,26 +77,26 @@ TEST(PailierCryptography, HardLoad) {
 
     auto [n, lambda_val, g] = generate_keys(p, q);
 
-    std::vector<BigNum> votes{
-        BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)),
-        BigNum(2).pow(BigNum(30 * 1)), BigNum(2).pow(BigNum(30 * 1)),
+    std::vector<BigInt> votes{
+        BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)),
+        BigInt(2).pow(BigInt(30 * 1)), BigInt(2).pow(BigInt(30 * 1)),
     };
 
-    std::vector<BigNum> encrypted_votes{};
+    std::vector<BigInt> encrypted_votes{};
 
     for (auto m : votes) {
-        encrypted_votes.push_back(encrypt(m, BigNum(113), g, n));
+        encrypted_votes.push_back(encrypt(m, BigInt(113), g, n));
     }
 
-    BigNum encc{1};
-    BigNum t{0};
-    BigNum nn = n * n;
+    BigInt encc{1};
+    BigInt t{0};
+    BigInt nn = n * n;
 
     for (auto i : encrypted_votes) {
         encc = (encc * i) % nn;
     }
 
-    BigNum decsum = decrypt(encc, g, lambda_val, n);
+    BigInt decsum = decrypt(encc, g, lambda_val, n);
 
     EXPECT_EQ(decsum.toString(), "5368709120");
 }
@@ -109,17 +109,17 @@ TEST(BlindSignature, SimpleTest) {
         std::string message = "Hello, Blind Signature!";
         // std::cout << "Сообщение: '" << message << "'" << std::endl;
 
-        // Преобразуем сообщение в BigNum
-        BigNum m = BlindSignature::messageToBigNum(message);
+        // Преобразуем сообщение в BigInt
+        BigInt m = BlindSignature::messageToBigInt(message);
 
         // std::cout << "\n🔹 Ослепление сообщения..." << std::endl;
         auto [m_blinded, r] = BlindSignature::blind(m, rsa.publicKey.e, rsa.publicKey.n);
 
         // std::cout << "\n🔹 Подпись ослеплённого сообщения..." << std::endl;
-        BigNum s_blinded = BlindSignature::signBlinded(m_blinded, rsa.privateKey.d, rsa.publicKey.n);
+        BigInt s_blinded = BlindSignature::signBlinded(m_blinded, rsa.privateKey.d, rsa.publicKey.n);
 
         // std::cout << "\n🔹 Снятие ослепления..." << std::endl;
-        BigNum signature = BlindSignature::unblind(s_blinded, r, rsa.publicKey.n);
+        BigInt signature = BlindSignature::unblind(s_blinded, r, rsa.publicKey.n);
 
         // std::cout << "Полученная подпись: " << signature.toString() << std::endl;
 
@@ -135,22 +135,22 @@ TEST(BlindSignature, SimpleTest) {
 TEST(ZKP, SimpleTest2) {
     try {
         // Генерация ключей
-        BigNum p = BigNum::fromString("838382000974237847921957342377847823774311");
-        BigNum q = BigNum::fromString("113011");
-        BigNum n = p * q;
-        BigNum lambdaVal = lcm(p - BigNum(1), q - BigNum(1));
-        BigNum g = n + BigNum(1);
+        BigInt p = BigInt::fromString("838382000974237847921957342377847823774311");
+        BigInt q = BigInt::fromString("113011");
+        BigInt n = p * q;
+        BigInt lambdaVal = lcm(p - BigInt(1), q - BigInt(1));
+        BigInt g = n + BigInt(1);
 
         // Варианты голосов (должны быть уникальными и достаточно большими)
-        std::vector<BigNum> voteVariants;
+        std::vector<BigInt> voteVariants;
         for (int i = 0; i < 4; ++i) {
-            voteVariants.push_back(BigNum(2).pow(BigNum(30 * i)));
+            voteVariants.push_back(BigInt(2).pow(BigInt(30 * i)));
         }
 
         // Тестовые голоса (должны быть из voteVariants)
-        std::vector<BigNum> votes;
+        std::vector<BigInt> votes;
         for (int i = 0; i < 5; ++i) {
-            votes.push_back(BigNum(2).pow(BigNum(30 * 1)));
+            votes.push_back(BigInt(2).pow(BigInt(30 * 1)));
         }
 
         // Проверка, что все голоса из допустимых вариантов
@@ -163,7 +163,7 @@ TEST(ZKP, SimpleTest2) {
         */
 
         // Процесс голосования с доказательствами
-        std::vector<BigNum> encryptedVotes;
+        std::vector<BigInt> encryptedVotes;
         std::vector<CorrectMessageProof> proofs;
 
         for (const auto& m : votes) {
@@ -193,15 +193,15 @@ TEST(ZKP, SimpleTest2) {
         }
 
         // Подсчет голосов (гомоморфное сложение)
-        BigNum encryptedSum(1);
+        BigInt encryptedSum(1);
         for (const auto& vote : encryptedVotes) {
             encryptedSum = (encryptedSum * vote) % (n * n);
         }
 
         // Расшифровка суммы
-        BigNum numerator = ((encryptedSum.modExp(lambdaVal, n * n) - BigNum(1)) / n) % n;
-        BigNum denominator = ((g.modExp(lambdaVal, n * n) - BigNum(1)) / n) % n;
-        BigNum decryptedSum = (numerator * denominator.modInverse(n)) % n;
+        BigInt numerator = ((encryptedSum.modExp(lambdaVal, n * n) - BigInt(1)) / n) % n;
+        BigInt denominator = ((g.modExp(lambdaVal, n * n) - BigInt(1)) / n) % n;
+        BigInt decryptedSum = (numerator * denominator.modInverse(n)) % n;
 
         std::cout << "Итоговый результат: " << decryptedSum.toString() << std::endl;
 
@@ -269,7 +269,7 @@ TEST(MerklieTree, SimpleUsage) {
 }
 
 TEST(ZKP, AdditionalProves) {
-    BigNum n = BigNum::fromString(
+    BigInt n = BigInt::fromString(
         "38089600989304856086482318810723385896398240399689251567738501021439968074673025185637718386773707987978862422"
         "67677600150494432732161976784259269558511239516800459104383252101833414465255197326164953899416567749993382091"
         "21700543549400831719887789241885970910418134252817104741423771936821996129601753666411089803077304575969167078"
@@ -282,7 +282,7 @@ TEST(ZKP, AdditionalProves) {
         "06666639412397985123660455515065530656649359014682756795574228730414835770190143430298742053945803172589064416"
         "48785690054977035147489001541460437192841504074323578110000830029934258704211681936207762622919306759388206295"
         "65305882369105698657203");
-    BigNum r = BigNum::fromString(
+    BigInt r = BigInt::fromString(
         "20812197462198414887759978081142355862194537827970386287838801667259802112864771980573048792495234984990481325"
         "26170502216792658815469893362374220923051607980273911526736672650455447027791705919417000966737384669713146318"
         "34313933228274955558730115419389246487021252906973443212558433242840339752838201139530735690707477842451638973"
@@ -296,8 +296,8 @@ TEST(ZKP, AdditionalProves) {
         "30067818640873854124669846434189151292663505460152171142136229589070721042085752328865526620164654106102915099"
         "6499711101143122250902");
 
-    std::vector<BigNum> ziVec{
-        BigNum::fromString(
+    std::vector<BigInt> ziVec{
+        BigInt::fromString(
             "1605836870155397149934180231669286179150900118438690060496849514857840903072584575327020846149034806903"
             "4338367038470622974089477618785997404132687962544029966551624948730032033580671370497682702064655056926"
             "3867983097073648873545938068014901810825569524097851087981354750788518950400370049165954919898732875591"
@@ -310,7 +310,7 @@ TEST(ZKP, AdditionalProves) {
             "5335763403316942183586297783349682434016769844128043859915678138194426760700278405541358338397102299138"
             "9812040799865009905596235093267489384897006646080211100204178856636035564163916796978515537393238543362"
             "7824980037513018000975779274646278383107675226724208962521593601078714107400393595082028079887512193"),
-        BigNum::fromString(
+        BigInt::fromString(
             "8881626845220167975138648607635949685519562207675836762231459026802650439087919351970330220467331844961"
             "0481070064323104605009225490965655094534125141073748444721026646329158278523085355771748387162975034051"
             "6814920319524912368618891819813412102582576441800389440878867419464949929110724574403390247772504342507"
@@ -325,11 +325,11 @@ TEST(ZKP, AdditionalProves) {
             "425899461812817523098705091043332648108267036548899629084589733436066810516908306216114090754763348"),
     };
 
-    std::vector<BigNum> eiVec{
-        BigNum::fromString("80202988921795916388281716478631576779076299504468531256800339585132691958970"),
-        BigNum::fromString("7324626410221592119099880977314371662453875078409971785479274873350811520326")};
+    std::vector<BigInt> eiVec{
+        BigInt::fromString("80202988921795916388281716478631576779076299504468531256800339585132691958970"),
+        BigInt::fromString("7324626410221592119099880977314371662453875078409971785479274873350811520326")};
 
-    BigNum w = BigNum::fromString(
+    BigInt w = BigInt::fromString(
         "20144678041720788686830818145083245540841754381332201873850324822102936531636151077302211602574929492882573952"
         "40126358018253013378141218522910109400983082544601377662673962583917453169200350781074391375044213847566504940"
         "14759418986634088064324876505404493059935725387599910009034888052693759935508232671391655394543843709579945425"
@@ -343,13 +343,13 @@ TEST(ZKP, AdditionalProves) {
         "92700726262322706743211468923189254553824368978852702831271459090536020602567557144056240696448809269748802732"
         "84941703650319756346367");
 
-    std::vector<BigNum> msgVariants;
+    std::vector<BigInt> msgVariants;
     for (size_t i = 0; i < 3; i++) {
-        msgVariants.push_back(BigNum(2).pow(BigNum(30 * i)));
+        msgVariants.push_back(BigInt(2).pow(BigInt(30 * i)));
     }
 
-    BigNum msgToEnc = BigNum(1);
-    BigNum encryptedMessage = BigNum::fromString(
+    BigInt msgToEnc = BigInt(1);
+    BigInt encryptedMessage = BigInt::fromString(
         "90437538421799689831906903706038182451494279872936917249780067350704779142488863502972969558533870988734456870"
         "00951675124341918619127465394519782810475748262561024660751935731030750591783789513535156678197256001780233361"
         "72534529444963300680456788159179645377501698849110878155058745782639480270362571112575340302387533189255628103"

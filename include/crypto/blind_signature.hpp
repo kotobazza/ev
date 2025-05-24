@@ -2,18 +2,18 @@
 #include <random>
 #include <stdexcept>
 #include <string>
-#include "bignum.hpp"
+#include "bigint.hpp"
 
 class RSAKeyPair {
    public:
     struct PublicKey {
-        BigNum e;
-        BigNum n;
+        BigInt e;
+        BigInt n;
     };
 
     struct PrivateKey {
-        BigNum d;
-        BigNum n;
+        BigInt d;
+        BigInt n;
     };
 
     PublicKey publicKey;
@@ -24,8 +24,8 @@ class RSAKeyPair {
    private:
     void generateKeys(int bits) {
         // Генерация простых чисел p и q
-        BigNum p = generatePrime(bits);
-        BigNum q = generatePrime(bits);
+        BigInt p = generatePrime(bits);
+        BigInt q = generatePrime(bits);
 
         // Убедимся, что p и q разные
         while (p == q) {
@@ -33,25 +33,25 @@ class RSAKeyPair {
         }
 
         // Вычисление модуля n и функции Эйлера phi(n)
-        BigNum n = p * q;
-        BigNum phi = (p - BigNum(1)) * (q - BigNum(1));
+        BigInt n = p * q;
+        BigInt phi = (p - BigInt(1)) * (q - BigInt(1));
 
         // Обычно e = 65537 (2^16 + 1)
-        BigNum e = BigNum::fromString("65537");
+        BigInt e = BigInt::fromString("65537");
 
         // Проверяем, что e и phi взаимно просты
-        while (gcd(e, phi) != BigNum(1)) {
-            e = e + BigNum(2);
+        while (gcd(e, phi) != BigInt(1)) {
+            e = e + BigInt(2);
         }
 
         // Вычисление секретной экспоненты d
-        BigNum d = e.modInverse(phi);
+        BigInt d = e.modInverse(phi);
 
         publicKey = {e, n};
         privateKey = {d, n};
     }
 
-    BigNum generatePrime(int bits) {
+    BigInt generatePrime(int bits) {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<int> distrib(0, 9);
@@ -63,43 +63,43 @@ class RSAKeyPair {
                 numStr += std::to_string(distrib(gen));
             }
 
-            BigNum candidate = BigNum::fromString(numStr);
+            BigInt candidate = BigInt::fromString(numStr);
 
             // Проверка на простоту (упрощенная - в реальном коде нужен тест Миллера-Рабина)
-            if (candidate % BigNum(2) != BigNum(0) && isProbablePrime(candidate)) {
+            if (candidate % BigInt(2) != BigInt(0) && isProbablePrime(candidate)) {
                 return candidate;
             }
         }
     }
 
-    bool isProbablePrime(const BigNum& n, int k = 5) {
-        if (n == BigNum(2) || n == BigNum(3)) {
+    bool isProbablePrime(const BigInt& n, int k = 5) {
+        if (n == BigInt(2) || n == BigInt(3)) {
             return true;
         }
-        if (n % BigNum(2) == BigNum(0) || n == BigNum(1)) {
+        if (n % BigInt(2) == BigInt(0) || n == BigInt(1)) {
             return false;
         }
 
         // Представляем n-1 в виде (2^s)*d
-        BigNum d = n - BigNum(1);
-        BigNum s(0);
-        while (d % BigNum(2) == BigNum(0)) {
-            d = d / BigNum(2);
-            s = s + BigNum(1);
+        BigInt d = n - BigInt(1);
+        BigInt s(0);
+        while (d % BigInt(2) == BigInt(0)) {
+            d = d / BigInt(2);
+            s = s + BigInt(1);
         }
 
         for (int i = 0; i < k; ++i) {
-            BigNum a = randomBigNum(BigNum(2), n - BigNum(2));
-            BigNum x = a.modExp(d, n);
+            BigInt a = randomBigInt(BigInt(2), n - BigInt(2));
+            BigInt x = a.modExp(d, n);
 
-            if (x == BigNum(1) || x == n - BigNum(1)) {
+            if (x == BigInt(1) || x == n - BigInt(1)) {
                 continue;
             }
 
             bool continueLoop = false;
-            for (BigNum j(1); j < s; j = j + BigNum(1)) {
-                x = x.modExp(BigNum(2), n);
-                if (x == n - BigNum(1)) {
+            for (BigInt j(1); j < s; j = j + BigInt(1)) {
+                x = x.modExp(BigInt(2), n);
+                if (x == n - BigInt(1)) {
                     continueLoop = true;
                     break;
                 }
@@ -116,10 +116,10 @@ class RSAKeyPair {
     }
 
    public:
-    static BigNum randomBigNum(const BigNum& min, const BigNum& max) {
+    static BigInt randomBigInt(const BigInt& min, const BigInt& max) {
         std::random_device rd;
         std::mt19937 gen(rd());
-        BigNum range = max - min;
+        BigInt range = max - min;
 
         // Генерация случайного числа в диапазоне [0, range)
         std::string numStr;
@@ -130,7 +130,7 @@ class RSAKeyPair {
             numStr += std::to_string(distrib(gen));
         }
 
-        BigNum randomNum = BigNum::fromString(numStr);
+        BigInt randomNum = BigInt::fromString(numStr);
         randomNum = randomNum % range;
 
         return randomNum + min;
@@ -139,42 +139,42 @@ class RSAKeyPair {
 
 class BlindSignature {
    public:
-    static std::pair<BigNum, BigNum> blind(const BigNum& message, const BigNum& e, const BigNum& n) {
+    static std::pair<BigInt, BigInt> blind(const BigInt& message, const BigInt& e, const BigInt& n) {
         // Выбираем случайное r, взаимно простое с n
-        BigNum r;
+        BigInt r;
         do {
-            r = RSAKeyPair::randomBigNum(BigNum(2), n - BigNum(1));
-        } while (gcd(r, n) != BigNum(1));
+            r = RSAKeyPair::randomBigInt(BigInt(2), n - BigInt(1));
+        } while (gcd(r, n) != BigInt(1));
 
         // Ослепляем: m' = m * r^e mod n
-        BigNum rPowE = r.modExp(e, n);
-        BigNum blindedMessage = (message * rPowE) % n;
+        BigInt rPowE = r.modExp(e, n);
+        BigInt blindedMessage = (message * rPowE) % n;
 
         return {blindedMessage, r};
     }
 
-    static BigNum signBlinded(const BigNum& blindedMessage, const BigNum& d, const BigNum& n) {
+    static BigInt signBlinded(const BigInt& blindedMessage, const BigInt& d, const BigInt& n) {
         // Подпись ослепленного сообщения: s' = (m')^d mod n
         return blindedMessage.modExp(d, n);
     }
 
-    static BigNum unblind(const BigNum& blindedSignature, const BigNum& r, const BigNum& n) {
+    static BigInt unblind(const BigInt& blindedSignature, const BigInt& r, const BigInt& n) {
         // Снятие ослепления: s = s' * r^(-1) mod n
-        BigNum rInv = r.modInverse(n);
+        BigInt rInv = r.modInverse(n);
         return (blindedSignature * rInv) % n;
     }
 
-    static bool verify(const BigNum& message, const BigNum& signature, const BigNum& e, const BigNum& n) {
+    static bool verify(const BigInt& message, const BigInt& signature, const BigInt& e, const BigInt& n) {
         // Проверка подписи: s^e mod n == m
-        BigNum verified = signature.modExp(e, n);
+        BigInt verified = signature.modExp(e, n);
         return verified == message;
     }
 
-    static BigNum messageToBigNum(const std::string& message) {
-        // Преобразование строки в BigNum
-        BigNum result(0);
+    static BigInt messageToBigInt(const std::string& message) {
+        // Преобразование строки в BigInt
+        BigInt result(0);
         for (char c : message) {
-            result = result * BigNum(256) + BigNum(static_cast<unsigned int>(c));
+            result = result * BigInt(256) + BigInt(static_cast<unsigned int>(c));
         }
         return result;
     }
