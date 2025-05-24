@@ -96,6 +96,7 @@ executable(
 )
 
 test_sources = files(
+  'src/crypto/bigint.cpp',
   'tests/tests.cpp',
 )
 
