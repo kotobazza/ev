@@ -1,0 +1,43 @@
+<%c++
+// Здесь будут необходимые include, когда они понадобятся
+    
+auto error_msg = @@.get<std::string>("error_msg");
+%>
+
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Регистрация</title>
+    <link rel="stylesheet" href="/main.css">
+</head>
+
+<body>
+    <div class="auth-container">
+        <h1>Регистрация</h1>
+        <%c++ if (!error_msg.empty()) { %>
+        <div class="error-message">
+            <%= error_msg %>
+        </div>
+        <%c++ } %>
+        <form action="/user/register/submit" method="POST">
+            <div class="form-group">
+                <label>Логин:</label>
+                <input type="text" name="login" required>
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label>Подтвердите пароль:</label>
+                <input type="password" name="password_confirm" required>
+            </div>
+            <button type="submit" class="button">Зарегистрироваться</button>
+        </form>
+        <p>Уже есть аккаунт? <a href="/user/signin" class="button">Войти</a></p>
+    </div>
+</body>
+
+</html>

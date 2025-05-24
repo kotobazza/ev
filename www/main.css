@@ -104,3 +104,38 @@ body {
     background-color: #f9f9f9;
     border: 1px solid #ccc;
 }
+
+/* Стили для форм авторизации */
+.auth-container {
+    max-width: 400px;
+    margin: 2em auto;
+    padding: 2em;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: #f9f9f9;
+}
+
+.form-group {
+    margin-bottom: 1em;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5em;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.5em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 1em;
+    margin-bottom: 1em;
+    border: 1px solid #ef9a9a;
+    border-radius: 4px;
+}
