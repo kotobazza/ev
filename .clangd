@@ -1,0 +1,12 @@
+CompileFlags:
+  Add: [-Wall, -Wextra, -std=c++17]
+  Remove: [-W*, -std=*]
+  
+Diagnostics:
+  UnusedIncludes: Strict
+  
+Index:
+  Background: Build
+  
+Completion:
+  AllScopes: true 
