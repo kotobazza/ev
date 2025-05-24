@@ -1,13 +1,11 @@
-#include <vector>
-#include <string>
-#include <sstream>
-#include <iomanip>
-#include "bignum.hpp"
 #include <openssl/evp.h>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <vector>
+#include "bignum.hpp"
 
 using namespace std;
-
-
 
 BigNum L(const BigNum& x, const BigNum& n) {
     return (x - BigNum(1)) / n;
@@ -65,6 +63,6 @@ BigNum compute_digest(const vector<BigNum>& values) {
     for (unsigned int i = 0; i < length; ++i) {
         ss << hex << setw(2) << setfill('0') << (int)hash[i];
     }
-    
-    return BigNum(ss.str());
+
+    return BigNum::fromString(ss.str());
 }
