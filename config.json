@@ -1,7 +1,8 @@
 {
     "app": {
-        "document_root": "./",
-        "view_path": "views"
+        "document_root": "../www",
+        "view_path": "views",
+        "server_header_field": ""
     },
     "listeners": [
         {
