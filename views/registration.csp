@@ -10,7 +10,7 @@ auto error_msg = @@.get<std::string>("error_msg");
 <head>
     <meta charset="UTF-8" />
     <title>Регистрация</title>
-    <link rel="stylesheet" href="/main.css">
+    <link rel="stylesheet" href="/css/main.css">
 </head>
 
 <body>

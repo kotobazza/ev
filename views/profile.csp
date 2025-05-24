@@ -8,6 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Система EV</title>
+    <link rel="stylesheet" href="/css/main.css">
     <style>
         body {
             margin: 0;
