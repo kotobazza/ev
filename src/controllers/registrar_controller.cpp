@@ -7,8 +7,8 @@
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/open-source-parsers-jsoncpp/traits.h>
 #include <sodium.h>  // libsodium
-#include "zkp.hpp"
 #include "bignum.hpp"
+#include "zkp.hpp"
 
 using namespace drogon;
 using traits = jwt::traits::open_source_parsers_jsoncpp;
@@ -90,47 +90,53 @@ class RegistrarController : public drogon::HttpController<RegistrarController> {
                     std::cout << "Received vote data:" << std::endl;
                     std::cout << "Voting ID: " << votingId << std::endl;
                     std::cout << "Encrypted ballot: " << encryptedBallot << std::endl;
-                    
-
 
                     std::cout << "ZKP Proof E:" << std::endl;
                     for (const auto& num : zkpProofE) {
                         std::cout << num.asString() << std::endl;
-                        eVec.push_back(BigNum(num.asString()));
+                        eVec.push_back(BigNum::fromBase64(num.asString()));
                     }
-
-                    LOG_INFO << "ZPK Proof E size: "<< eVec.size();
 
                     std::cout << "ZKP Proof Z:" << std::endl;
                     for (const auto& num : zkpProofZ) {
                         std::cout << num.asString() << std::endl;
-                        zVec.push_back(BigNum(num.asString()));
+                        zVec.push_back(BigNum::fromBase64(num.asString()));
                     }
 
                     std::cout << "ZKP Proof A:" << std::endl;
                     for (const auto& num : zkpProofA) {
                         std::cout << num.asString() << std::endl;
-                        aVec.push_back(BigNum(num.asString()));
+                        aVec.push_back(BigNum::fromBase64(num.asString()));
                     }
 
-                    BigNum n("380896009893048560864823188107233858963982403996892515677385010214399680746730251856377183867737079879788624226767760015049443273216197678425926955851123951680045910438325210183341446525519732616495389941656774999338209121700543549400831719887789241885970910418134252817104741423771936821996129601753666411089803077304575969167078596083477740566606321127578163570218106632335327867008230931421313129668938117794680002682062414712597610033243784412890932078995325645244606435382024291250728659671413145512628686462515210549163171304955265949603139631964298586781973910155230496914147236961035678634158527659716556090467815377731835032074071006141116987097028583494821928820214300633437489794575706075143181627304551789130563293237874301035140453901515911666764017759952412498688048101576360142912015293898206382436361335392251331363553118844131089912253829167955967845708791573589035275802365027223503811223794495306140657344210614574188880970705676011397756033435333448815707274737506211413066666394123979851236604555150655306566493590146827567955742287304148357701901434302987420539458031725890644164878569005497703514748900154146043719284150407432357811000083002993425870421168193620776262291930675938820629565305882369105698657203");
-                    
-                    
+                    BigNum n = BigNum::fromString(
+                        "3808960098930485608648231881072338589639824039968925156773850102143996807467302518563771838677"
+                        "3707987978862422676776001504944327321619767842592695585112395168004591043832521018334144652551"
+                        "9732616495389941656774999338209121700543549400831719887789241885970910418134252817104741423771"
+                        "9368219961296017536664110898030773045759691670785960834777405666063211275781635702181066323353"
+                        "2786700823093142131312966893811779468000268206241471259761003324378441289093207899532564524460"
+                        "6435382024291250728659671413145512628686462515210549163171304955265949603139631964298586781973"
+                        "9101552304969141472369610356786341585276597165560904678153777318350320740710061411169870970285"
+                        "8349482192882021430063343748979457570607514318162730455178913056329323787430103514045390151591"
+                        "1666764017759952412498688048101576360142912015293898206382436361335392251331363553118844131089"
+                        "9122538291679559678457087915735890352758023650272235038112237944953061406573442106145741888809"
+                        "7070567601139775603343533344881570727473750621141306666639412397985123660455515065530656649359"
+                        "0146827567955742287304148357701901434302987420539458031725890644164878569005497703514748900154"
+                        "1460437192841504074323578110000830029934258704211681936207762622919306759388206295653058823691"
+                        "05698657203");
+
                     std::vector<BigNum> msgVariants;
-                    for(size_t i = 0; i< eVec.size(); i++){
-                        msgVariants.push_back(BigNum(2).pow(BigNum(30*i)));
+                    for (size_t i = 0; i < eVec.size(); i++) {
+                        msgVariants.push_back(BigNum(2).pow(BigNum(30 * i)));
                     }
 
-                    
+                    CorrectMessageProof scheme(eVec, zVec, aVec, BigNum::fromBase64(encryptedBallot), msgVariants, n);
 
-                    CorrectMessageProof scheme(eVec, zVec, aVec, BigNum(encryptedBallot), msgVariants, n);
-
-                    if(scheme.verify()){
+                    if (scheme.verify()) {
                         auto resp = HttpResponse::newHttpJsonResponse(Json::Value(true));
                         LOG_INFO << "verified\n";
                         callback(resp);
-                    }
-                    else{
+                    } else {
                         auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
                         resp->setStatusCode(HttpStatusCode::k409Conflict);
                         LOG_INFO << "not verified\n";
