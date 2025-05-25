@@ -9,7 +9,9 @@
 #include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/open-source-parsers-jsoncpp/traits.h>
 #include <sodium.h>  // libsodium
+#include "crypto_params.hpp"
 #include "drogon/HttpResponse.h"
+#include "jwt_auth_filter.h"
 
 using namespace drogon;
 using traits = jwt::traits::open_source_parsers_jsoncpp;
@@ -23,43 +25,9 @@ AuthController::AuthController() {
 void AuthController::handleSignin(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     LOG_INFO << "requested Signin page";
 
-    auto cookies = req->cookies();
-    auto it = cookies.find("access_token");
-    if (it == cookies.end()) {
-        // Нет токена — сразу показываем форму входа
-        auto resp = HttpResponse::newHttpViewResponse("login");
-
-        resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
-        callback(resp);
-        return;
-    }
-    std::string token = it->second;
-
-    // Проверяем токен в Redis
-    auto redis_client = app().getRedisClient();
-    // Ключ в Redis — "access_token:<token>"
-    std::string redis_key = "access_token:" + token;
-
-    redis_client->execCommandAsync(
-        [callback](const nosql::RedisResult& result) mutable {
-            if (result.isNil() || result.asString().empty()) {
-                // Токен не найден или пустой — показываем форму входа
-                auto resp = HttpResponse::newHttpViewResponse("login");
-                resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
-                callback(resp);
-            } else {
-                // Токен валиден — делаем редирект на главную страницу (или куда надо)
-                auto resp = HttpResponse::newRedirectionResponse("/user/profile");
-                callback(resp);
-            }
-        },
-        [callback](const nosql::RedisException& ex) {
-            // Ошибка Redis — лучше показать форму входа, но можно логировать
-            auto resp = HttpResponse::newHttpViewResponse("login");
-            resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
-            callback(resp);
-        },
-        "GET %s", redis_key.c_str());
+    auto resp = HttpResponse::newHttpViewResponse("login");
+    resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
+    callback(resp);
 }
 
 void AuthController::handleSignup(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -90,74 +58,73 @@ void AuthController::handleSubmitLogin(const HttpRequestPtr& req,
     client->execSqlAsync(
         "SELECT id, password_hash FROM Users WHERE login=$1",
         [password, login, callback](const orm::Result& r) mutable {
-            if (r.empty()) {
-                auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k401Unauthorized);
-                resp->setBody("Неверный логин или пароль");
-                callback(resp);
-                return;
-            }
-
-            auto db_password_hash = r[0]["password_hash"].as<std::string>();
-
-            // Проверяем пароль
-            if (crypto_pwhash_str_verify(db_password_hash.c_str(), password.c_str(), password.size()) != 0) {
-                auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k401Unauthorized);
-                resp->setBody("Неверный логин или пароль");
-                callback(resp);
-                return;
-            }
-
-            // Генерируем JWT
-            auto now = std::chrono::system_clock::now();
-            auto expires = now + std::chrono::hours(24);
-
-            auto token =
-                jwt::create<traits>()
-                    .set_type("JWT")
-                    .set_issuer("ev")
-                    .set_payload_claim("user_id", jwt::basic_claim<traits>(std::to_string(r[0]["id"].as<int>())))
-                    .set_issued_at(now)
-                    .set_expires_at(expires)
-                    .sign(jwt::algorithm::hs256{"your_secret_key"});
-
-            auto redis_client = app().getRedisClient();
-            redis_client->execCommandAsync(
-                [token, callback](const nosql::RedisResult& result) mutable {
+            try {
+                if (r.empty()) {
                     auto resp = HttpResponse::newHttpResponse();
-                    if (result.asString() == "OK") {
-                        resp->setStatusCode(k200OK);
-
-                        Cookie cookie("access_token", token);
-                        cookie.setPath("/");
-                        cookie.setHttpOnly(true);
-                        cookie.setSecure(true);
-                        cookie.setMaxAge(86400);  // 24 часа
-                        resp->addCookie(cookie);
-
-                        auto resp = HttpResponse::newRedirectionResponse("/user/profile");  // или "/"
-                        resp->addCookie(cookie);
-                        callback(resp);
-                    } else {
-                        resp->setStatusCode(k500InternalServerError);
-                        resp->setBody("Ошибка: Redis вернул неожиданный результат");
-                    }
+                    resp->setStatusCode(k401Unauthorized);
+                    resp->setBody("Неверный логин или пароль");
                     callback(resp);
-                },
-                [callback](const nosql::RedisException& ex) {
+                    return;
+                }
+
+                try {
+                    auto db_password_hash = r[0]["password_hash"].as<std::string>();
+                    auto userId = r[0]["id"].as<int>();
+
+                    // Проверяем пароль
+                    if (crypto_pwhash_str_verify(db_password_hash.c_str(), password.c_str(), password.size()) != 0) {
+                        auto resp = HttpResponse::newHttpResponse();
+                        resp->setStatusCode(k401Unauthorized);
+                        resp->setBody("Неверный логин или пароль");
+                        callback(resp);
+                        return;
+                    }
+
+                    auto token = JwtAuthFilter::createToken(userId);
+                    if (token.empty()) {
+                        auto resp = HttpResponse::newHttpResponse();
+                        resp->setStatusCode(k500InternalServerError);
+                        resp->setBody(std::string("Error creating token"));
+                        callback(resp);
+                        return;
+                    }
+
+                    LOG_INFO << "Token created: " << token;
+
+                    Cookie cookie("access_token", token);
+                    cookie.setPath("/");
+                    cookie.setHttpOnly(true);
+                    cookie.setMaxAge(CryptoParams::jwtAuthTokenValidityMinutes * 60);
+
+                    auto resp = HttpResponse::newRedirectionResponse("/user/profile");
+                    resp->setStatusCode(k302Found);
+                    resp->addCookie(cookie);
+
+                    LOG_INFO << "Ready to send redirection response from login";
+
+                    callback(resp);
+                    return;
+                } catch (const std::exception& e) {
                     auto resp = HttpResponse::newHttpResponse();
                     resp->setStatusCode(k500InternalServerError);
-                    resp->setBody(std::string("Redis ошибка: ") + ex.what());
+                    resp->setBody("Ошибка: некорректные данные пользователя");
                     callback(resp);
-                },
-                "SETEX access_token:%s 86400 %s", token.c_str(), token.c_str());
+                    return;
+                }
+            } catch (const std::exception& e) {
+                auto resp = HttpResponse::newHttpResponse();
+                resp->setStatusCode(k500InternalServerError);
+                resp->setBody(std::string("Внутренняя ошибка сервера: ") + e.what());
+                callback(resp);
+                return;
+            }
         },
         [callback](const orm::DrogonDbException& e) {
             auto resp = HttpResponse::newHttpResponse();
             resp->setStatusCode(k500InternalServerError);
             resp->setBody("DB ошибка: " + std::string(e.base().what()));
             callback(resp);
+            return;
         },
         login);
 }
@@ -188,45 +155,92 @@ void AuthController::handleSubmitRegister(const HttpRequestPtr& req,
 
     auto client = app().getDbClient();
 
-    // Проверяем, что логин уникален
     client->execSqlAsync(
         "SELECT id FROM Users WHERE login=$1",
         [password, login, callback, client](const orm::Result& r) mutable {
-            if (!r.empty()) {
-                auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k409Conflict);
-                resp->setBody("Ошибка: логин уже занят");
-                callback(resp);
-                return;
-            }
-
-            // Хешируем пароль
-            char hashed_password[crypto_pwhash_STRBYTES];
-            if (crypto_pwhash_str(hashed_password, password.c_str(), password.size(), crypto_pwhash_OPSLIMIT_MODERATE,
-                                  crypto_pwhash_MEMLIMIT_MODERATE) != 0) {
-                auto resp = HttpResponse::newHttpResponse();
-                resp->setStatusCode(k500InternalServerError);
-                resp->setBody("Ошибка при хешировании пароля");
-                callback(resp);
-                return;
-            }
-
-            // Вставляем пользователя в БД
-            client->execSqlAsync(
-                "INSERT INTO Users (login, password_hash) VALUES ($1, $2)",
-                [callback](const orm::Result&) {
+            try {
+                if (!r.empty()) {
                     auto resp = HttpResponse::newHttpResponse();
-                    resp->setStatusCode(k200OK);
-                    resp->setBody("Регистрация прошла успешно. <a href=\"/user/signin\">Войти</a>");
+                    resp->setStatusCode(k409Conflict);
+                    resp->setBody("Ошибка: логин уже занят");
                     callback(resp);
-                },
-                [callback](const orm::DrogonDbException& e) {
+                    return;
+                }
+
+                char hashed_password[crypto_pwhash_STRBYTES];
+                if (crypto_pwhash_str(hashed_password, password.c_str(), password.size(),
+                                      crypto_pwhash_OPSLIMIT_MODERATE, crypto_pwhash_MEMLIMIT_MODERATE) != 0) {
                     auto resp = HttpResponse::newHttpResponse();
                     resp->setStatusCode(k500InternalServerError);
-                    resp->setBody("DB ошибка при регистрации: " + std::string(e.base().what()));
+                    resp->setBody("Ошибка при хешировании пароля");
                     callback(resp);
-                },
-                login, std::string(hashed_password));
+                    return;
+                }
+
+                client->execSqlAsync(
+                    "INSERT INTO Users (login, password_hash) VALUES ($1, $2) RETURNING id",
+                    [callback](const orm::Result& r) {
+                        try {
+                            if (r.empty()) {
+                                auto resp = HttpResponse::newHttpResponse();
+                                resp->setStatusCode(k500InternalServerError);
+                                resp->setBody("Ошибка: не удалось получить ID нового пользователя");
+                                callback(resp);
+                                return;
+                            }
+
+                            try {
+                                auto userId = r[0]["id"].as<int>();
+                                auto token = JwtAuthFilter::createToken(userId);
+                                if (token.empty()) {
+                                    auto resp = HttpResponse::newHttpResponse();
+                                    resp->setStatusCode(k500InternalServerError);
+                                    resp->setBody("Ошибка при создании токена");
+                                    callback(resp);
+                                    return;
+                                }
+
+                                LOG_INFO << "Token created: " << token;
+
+                                auto resp = HttpResponse::newRedirectionResponse("/user/profile");
+                                resp->setStatusCode(k302Found);
+
+                                Cookie cookie("access_token", token);
+                                cookie.setPath("/");
+                                cookie.setHttpOnly(true);
+                                cookie.setMaxAge(CryptoParams::jwtAuthTokenValidityMinutes * 60);
+
+                                resp->addCookie(cookie);
+
+                                LOG_INFO << "Ready to send redirection response from signup";
+
+                                callback(resp);
+                            } catch (const std::exception& e) {
+                                auto resp = HttpResponse::newHttpResponse();
+                                resp->setStatusCode(k500InternalServerError);
+                                resp->setBody("Ошибка: некорректные данные пользователя");
+                                callback(resp);
+                            }
+                        } catch (const std::exception& e) {
+                            auto resp = HttpResponse::newHttpResponse();
+                            resp->setStatusCode(k500InternalServerError);
+                            resp->setBody(std::string("Внутренняя ошибка сервера: ") + e.what());
+                            callback(resp);
+                        }
+                    },
+                    [callback](const orm::DrogonDbException& e) {
+                        auto resp = HttpResponse::newHttpResponse();
+                        resp->setStatusCode(k500InternalServerError);
+                        resp->setBody("DB ошибка при регистрации: " + std::string(e.base().what()));
+                        callback(resp);
+                    },
+                    login, std::string(hashed_password));
+            } catch (const std::exception& e) {
+                auto resp = HttpResponse::newHttpResponse();
+                resp->setStatusCode(k500InternalServerError);
+                resp->setBody(std::string("Внутренняя ошибка сервера: ") + e.what());
+                callback(resp);
+            }
         },
         [callback](const orm::DrogonDbException& e) {
             auto resp = HttpResponse::newHttpResponse();
