@@ -18,7 +18,7 @@ using traits = jwt::traits::open_source_parsers_jsoncpp;
 class RegistrarController : public drogon::HttpController<RegistrarController> {
    public:
     METHOD_LIST_BEGIN
-    ADD_METHOD_TO(RegistrarController::registerBallot, "/register_ballot", Post);
+    ADD_METHOD_TO(RegistrarController::registerBallot, "/register_ballot", Post, "JwtAuthFilter");
     METHOD_LIST_END
 
     RegistrarController() {

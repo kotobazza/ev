@@ -18,8 +18,7 @@ using traits = jwt::traits::open_source_parsers_jsoncpp;
 class TallyController : public drogon::HttpController<TallyController> {
    public:
     METHOD_LIST_BEGIN
-    // Изменяем метод на Post и путь на более подходящий
-    ADD_METHOD_TO(TallyController::submitVote, "/voting/submit", Post);
+    ADD_METHOD_TO(TallyController::submitVote, "/voting/submit", Post, "JwtAuthFilter");
     METHOD_LIST_END
 
     TallyController() {
@@ -30,112 +29,84 @@ class TallyController : public drogon::HttpController<TallyController> {
 
     void submitVote(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
         LOG_INFO << "requested vote submission";
-        // Проверяем JWT токен из куков
-        auto cookies = req->cookies();
-        auto it = cookies.find("access_token");
-        if (it == cookies.end()) {
-            auto resp = HttpResponse::newRedirectionResponse("/user/signin");
+
+        // Парсим JSON из тела запроса
+        Json::Value jsonData;
+        std::string err;
+        Json::CharReaderBuilder readerBuilder;
+        const std::string jsonStr(req->getBody());
+        std::istringstream iss(jsonStr);
+
+        if (!Json::parseFromStream(readerBuilder, iss, &jsonData, &err)) {
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(k400BadRequest);
+            resp->setBody("Invalid JSON: " + err);
             callback(resp);
             return;
         }
-        std::string token = it->second;
 
-        // Проверяем токен в Redis
-        auto redis_client = app().getRedisClient();
-        std::string redis_key = "access_token:" + token;
+        try {
+            std::string votingId = jsonData["voting_id"].asString();
+            BigInt encryptedBallot = BigInt::fromBase64(jsonData["encrypted_ballot"].asString());
+            Json::Value zkpProofE = jsonData["zkp_proof_e_vec"];
+            Json::Value zkpProofZ = jsonData["zkp_proof_z_vec"];
+            Json::Value zkpProofA = jsonData["zkp_proof_a_vec"];
 
-        redis_client->execCommandAsync(
-            [req, callback](const nosql::RedisResult& result) mutable {
-                if (result.isNil() || result.asString().empty()) {
-                    auto resp = HttpResponse::newRedirectionResponse("/user/signin");
-                    callback(resp);
-                    return;
-                }
-                LOG_INFO << "checked access tokens";
+            BigInt signature = BigInt::fromBase64(jsonData["signature"].asString());
 
-                // Парсим JSON из тела запроса
-                Json::Value jsonData;
-                std::string err;
-                Json::CharReaderBuilder readerBuilder;
-                const std::string jsonStr(req->getBody());
-                std::istringstream iss(jsonStr);
+            std::vector<BigInt> eVec, aVec, zVec;
 
-                if (!Json::parseFromStream(readerBuilder, iss, &jsonData, &err)) {
-                    auto resp = HttpResponse::newHttpResponse();
-                    resp->setStatusCode(k400BadRequest);
-                    resp->setBody("Invalid JSON: " + err);
-                    callback(resp);
-                    return;
-                }
+            for (const auto& num : zkpProofE) {
+                eVec.push_back(BigInt::fromBase64(num.asString()));
+            }
 
-                try {
-                    std::string votingId = jsonData["voting_id"].asString();
-                    BigInt encryptedBallot = BigInt::fromBase64(jsonData["encrypted_ballot"].asString());
-                    Json::Value zkpProofE = jsonData["zkp_proof_e_vec"];
-                    Json::Value zkpProofZ = jsonData["zkp_proof_z_vec"];
-                    Json::Value zkpProofA = jsonData["zkp_proof_a_vec"];
+            for (const auto& num : zkpProofZ) {
+                zVec.push_back(BigInt::fromBase64(num.asString()));
+            }
 
-                    BigInt signature = BigInt::fromBase64(jsonData["signature"].asString());
+            for (const auto& num : zkpProofA) {
+                aVec.push_back(BigInt::fromBase64(num.asString()));
+            }
 
-                    std::vector<BigInt> eVec, aVec, zVec;
-
-                    for (const auto& num : zkpProofE) {
-                        eVec.push_back(BigInt::fromBase64(num.asString()));
-                    }
-
-                    for (const auto& num : zkpProofZ) {
-                        zVec.push_back(BigInt::fromBase64(num.asString()));
-                    }
-
-                    for (const auto& num : zkpProofA) {
-                        aVec.push_back(BigInt::fromBase64(num.asString()));
-                    }
-
-                    if (encryptedBallot > CryptoParams::rsaN) {
-                        auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
-                        resp->setStatusCode(HttpStatusCode::k409Conflict);
-                        LOG_ERROR << "ballot is bigger than rsa n";
-                        callback(resp);
-                        return;
-                    }
-
-                    if (!BlindSignature::verify(encryptedBallot, signature, CryptoParams::rsaE, CryptoParams::rsaN)) {
-                        auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
-                        resp->setStatusCode(HttpStatusCode::k409Conflict);
-                        LOG_ERROR << "blinding not verified";
-                        callback(resp);
-                        return;
-                    }
-
-                    std::vector<BigInt> msgVariants;
-                    for (size_t i = 0; i < eVec.size(); i++) {
-                        msgVariants.push_back(BigInt(2).pow(BigInt(30 * i)));
-                    }
-
-                    CorrectMessageProof scheme(eVec, zVec, aVec, encryptedBallot, msgVariants, CryptoParams::pailierN);
-
-                    if (scheme.verify()) {
-                        auto resp = HttpResponse::newHttpJsonResponse(Json::Value(true));
-                        LOG_INFO << "ballot verified";
-                        callback(resp);
-                    } else {
-                        auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
-                        resp->setStatusCode(HttpStatusCode::k409Conflict);
-                        LOG_INFO << "ballot not verified";
-                        callback(resp);
-                    }
-                } catch (const std::exception& e) {
-                    LOG_ERROR << "error in ballot verification";
-                    auto resp = HttpResponse::newHttpResponse();
-                    resp->setStatusCode(k400BadRequest);
-                    resp->setBody(std::string("Missing or invalid fields: ") + e.what());
-                    callback(resp);
-                }
-            },
-            [callback](const nosql::RedisException& ex) {
-                auto resp = HttpResponse::newRedirectionResponse("/user/signin");
+            if (encryptedBallot > CryptoParams::rsaN) {
+                auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
+                resp->setStatusCode(HttpStatusCode::k409Conflict);
+                LOG_ERROR << "ballot is bigger than rsa n";
                 callback(resp);
-            },
-            "GET %s", redis_key.c_str());
+                return;
+            }
+
+            if (!BlindSignature::verify(encryptedBallot, signature, CryptoParams::rsaE, CryptoParams::rsaN)) {
+                auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
+                resp->setStatusCode(HttpStatusCode::k409Conflict);
+                LOG_ERROR << "blinding not verified";
+                callback(resp);
+                return;
+            }
+
+            std::vector<BigInt> msgVariants;
+            for (size_t i = 0; i < eVec.size(); i++) {
+                msgVariants.push_back(BigInt(2).pow(BigInt(30 * i)));
+            }
+
+            CorrectMessageProof scheme(eVec, zVec, aVec, encryptedBallot, msgVariants, CryptoParams::pailierN);
+
+            if (scheme.verify()) {
+                auto resp = HttpResponse::newHttpJsonResponse(Json::Value(true));
+                LOG_INFO << "ballot verified";
+                callback(resp);
+            } else {
+                auto resp = HttpResponse::newHttpJsonResponse(Json::Value(false));
+                resp->setStatusCode(HttpStatusCode::k409Conflict);
+                LOG_INFO << "ballot not verified";
+                callback(resp);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR << "error in ballot verification";
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(k400BadRequest);
+            resp->setBody(std::string("Missing or invalid fields: ") + e.what());
+            callback(resp);
+        }
     }
 };
