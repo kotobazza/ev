@@ -84,6 +84,7 @@ executable_sources = files(
   'src/controllers/user_controller.cpp',
   'src/controllers/voting_controller.cpp',
   'src/crypto/bigint.cpp',
+  'src/crypto/crypto_params.cpp',
   'src/main.cpp',
 )
 
@@ -97,6 +98,7 @@ executable(
 
 test_sources = files(
   'src/crypto/bigint.cpp',
+  'src/crypto/crypto_params.cpp',
   'tests/tests.cpp',
 )
 

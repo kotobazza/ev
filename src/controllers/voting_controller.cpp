@@ -8,6 +8,9 @@
 #include <jwt-cpp/traits/open-source-parsers-jsoncpp/traits.h>
 #include <sodium.h>  // libsodium
 
+#include "crypto_params.hpp"
+#include "openssl/crypto.h"
+
 using namespace drogon;
 using traits = jwt::traits::open_source_parsers_jsoncpp;
 
@@ -49,19 +52,19 @@ class VotingController : public drogon::HttpController<VotingController> {
                     auto resp = HttpResponse::newRedirectionResponse("/user/signin");
                     callback(resp);
                 } else {
-                    
-                    
-                    std::vector<std::string> options {"1", "2", "3"};
+                    std::vector<std::string> options{"1", "2", "3"};
                     HttpViewData data;
-
 
                     data.insert("login", std::string("alice"));
                     data.insert("voting_title", std::string("Voting"));
                     data.insert("voting_question", std::string("Voting?"));
                     data.insert("options", options);  // std::vector<std::string>
                     data.insert("voting_id", std::string("123"));
-                    data.insert("crypto_parametr_n", std::string("380896009893048560864823188107233858963982403996892515677385010214399680746730251856377183867737079879788624226767760015049443273216197678425926955851123951680045910438325210183341446525519732616495389941656774999338209121700543549400831719887789241885970910418134252817104741423771936821996129601753666411089803077304575969167078596083477740566606321127578163570218106632335327867008230931421313129668938117794680002682062414712597610033243784412890932078995325645244606435382024291250728659671413145512628686462515210549163171304955265949603139631964298586781973910155230496914147236961035678634158527659716556090467815377731835032074071006141116987097028583494821928820214300633437489794575706075143181627304551789130563293237874301035140453901515911666764017759952412498688048101576360142912015293898206382436361335392251331363553118844131089912253829167955967845708791573589035275802365027223503811223794495306140657344210614574188880970705676011397756033435333448815707274737506211413066666394123979851236604555150655306566493590146827567955742287304148357701901434302987420539458031725890644164878569005497703514748900154146043719284150407432357811000083002993425870421168193620776262291930675938820629565305882369105698657203"));
+                    data.insert("crypto_parametr_n", CryptoParams::pailierN.toString());
                     data.insert("options_amount", static_cast<int>(options.size()));
+                    data.insert("rsa_public_n", CryptoParams::rsaN.toString());
+                    data.insert("rsa_public_e", CryptoParams::rsaE.toString());
+
                     auto resp = drogon::HttpResponse::newHttpViewResponse("voting.csp", data);
                     callback(resp);
                 }
