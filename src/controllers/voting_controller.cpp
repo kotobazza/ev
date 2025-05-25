@@ -26,6 +26,7 @@ class VotingController : public drogon::HttpController<VotingController> {
     void votingPage(const HttpRequestPtr& req,
                     std::function<void(const HttpResponsePtr&)>&& callback,
                     std::string voting_id) {
+        LOG_INFO << "requested voting page";
         std::vector<std::string> options{"1", "2", "3"};
         HttpViewData data;
 
