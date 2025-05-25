@@ -1,10 +1,12 @@
 
 
-window.initializeZKP = function () {
+window.initializeZKP = function (params) {
 
 
-    const { voting_id, options_amount, publicKey } = EV_PARAMS;
+    const { voting_id, options_amount, publicKey, rsaSignPublicKey } = params;
 
+
+    console.log("rsaSignPublicKey:", rsaSignPublicKey);
     function gcd(a, b) {
         a = BigInt(a);
         b = BigInt(b);
@@ -389,11 +391,43 @@ window.initializeZKP = function () {
         return btoa(String.fromCharCode.apply(null, bytes));
     }
 
+    function base64ToBigInt(base64) {
+        console.log("base64ToBigInt:", base64);
+        // Декодируем base64 в бинарную строку
+        const binaryString = atob(base64);
+
+        // Преобразуем бинарную строку в массив байтов
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Преобразуем байты в шестнадцатеричную строку
+        const hexString = Array.from(bytes)
+            .map(byte => byte.toString(16).padStart(2, '0'))
+            .join('');
+
+        // Создаем BigInt из шестнадцатеричной строки
+        return BigInt('0x' + hexString);
+    }
+
     async function submitVote() {
         if (!proof) {
             console.error('Proof is not generated');
             return;
         }
+
+        const blindedBallot = blindBallot(proof.ciphertext, rsaSignPublicKey);
+
+        const resultBlind = await sendBlindedBallot(proof.ciphertext, blindedBallot, voting_id);
+
+        if (resultBlind.success) {
+            // Получили подпись, можно использовать result.signature
+            console.log('Бюллетень успешно подписан:', resultBlind.signature.toString());
+        } else {
+            console.error('Ошибка при регистрации бюллетеня:', resultBlind.error);
+        }
+
 
         const voteData = {
             voting_id: voting_id,
@@ -401,6 +435,7 @@ window.initializeZKP = function () {
             zkp_proof_e_vec: proof.e_vec.map(e => bigIntToBase64(e)),
             zkp_proof_z_vec: proof.z_vec.map(z => bigIntToBase64(z)),
             zkp_proof_a_vec: proof.a_vec.map(a => bigIntToBase64(a)),
+            signature: bigIntToBase64(resultBlind.signature),
         };
 
         const result = await verify(proof.e_vec, proof.z_vec, proof.a_vec, proof.ciphertext, proof.valid_messages, publicKey.n);
@@ -478,4 +513,112 @@ window.initializeZKP = function () {
     document.querySelector('.button').addEventListener('click', showConfirmation);
     document.querySelector('.modal-button.confirm').addEventListener('click', submitVote);
     document.querySelector('.modal-button.cancel').addEventListener('click', hideConfirmation);
+
+
+    function blindBallot(ciphertext, publicKey) {
+        // Преобразуем входные данные в BigInt
+        const message = BigInt(ciphertext);
+        const e = BigInt(publicKey.e);
+        const n = BigInt(publicKey.n);
+
+        // Выбираем случайное r, взаимно простое с n
+        let r;
+        do {
+            // Генерируем случайное число от 2 до n-1
+            const array = new Uint8Array(n.toString(2).length / 8 + 1);
+            crypto.getRandomValues(array);
+            r = BigInt('0x' + Array.from(array)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('')) % (n - 2n) + 2n;
+        } while (gcd(r, n) !== 1n);
+
+        // Ослепляем сообщение: m' = m * r^e mod n
+        const rPowE = modPow(r, e, n);
+        const blindedMessage = (message * rPowE) % n;
+
+        return {
+            blindedMessage: blindedMessage,
+            r: r
+        };
+    }
+
+    async function sendBlindedBallot(ballot, blindedBallot, votingId) {
+        try {
+            // Преобразуем большие числа в base64 для безопасной передачи
+            const ballotData = {
+                voting_id: votingId,
+                ballot: bigIntToBase64(ballot),
+                blinded_ballot: bigIntToBase64(blindedBallot.blindedMessage),
+                // Сохраняем r локально, оно понадобится позже для снятия ослепления
+                r_base64: bigIntToBase64(blindedBallot.r)
+            };
+
+            const response = await fetch('/register_ballot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include', // для отправки куков
+                body: JSON.stringify(ballotData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            // Проверяем успешность операции
+            if (result.success) {
+                // Сохраняем подписанную ослепленную бюллетень
+                const blindedSignature = base64ToBigInt(result.signature);
+
+                console.log("blindedSignature:", blindedSignature.toString());
+
+                // Снимаем ослепление
+                const unblindedSignature = unblindSignature(
+                    blindedSignature,
+                    blindedBallot.r,
+                    BigInt(rsaSignPublicKey.n)
+                );
+
+                console.log("unblindedSignature:", unblindedSignature.toString());
+
+                const isVerified = verifySignature(ballot, unblindedSignature, rsaSignPublicKey);
+                console.log("isVerified:", isVerified);
+
+
+
+                return {
+                    success: true,
+                    signature: unblindedSignature
+                };
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка при регистрации бюллетеня');
+            }
+        } catch (error) {
+            console.error('Ошибка при отправке ослепленной бюллетени:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+
+    function unblindSignature(blindedSignature, r, n) {
+        // Вычисляем r^(-1) mod n
+        const rInv = modInverse(r, n);
+        // Снимаем ослепление: s = s' * r^(-1) mod n
+        return blindedSignature * rInv % n;
+    }
+
+
+    function verifySignature(message, signature, rsaSignPublicKey) {
+        const n = BigInt(rsaSignPublicKey.n);
+        const e = BigInt(rsaSignPublicKey.e);
+        const s = BigInt(signature);
+        return message === modPow(s, e, n);
+    }
+
 };

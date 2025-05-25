@@ -7,6 +7,8 @@
     auto options_amount = @@.get<int>("options_amount");
     auto voting_id = @@.get<std::string>("voting_id");
     auto crypto_parametr_n = @@.get<std::string>("crypto_parametr_n");
+    auto rsa_public_n = @@.get<std::string>("rsa_public_n");
+    auto rsa_public_e = @@.get<std::string>("rsa_public_e");
 %>
 
                             <head>
@@ -53,20 +55,20 @@
                                         </div>
                                     </div>
                                 </div>
-
+                                <script src="/js/voting.js"></script>
                                 <script>
-                                    // Глобальные параметры, доступные для основного JS файла
                                     const EV_PARAMS = {
                                         voting_id: Number('{%voting_id%}'),
                                         options_amount: {%options_amount%},
                                         publicKey: {
                                             n: BigInt('{%crypto_parametr_n%}'),
                                             g: BigInt('{%crypto_parametr_n%}') + 1n
+                                        },
+                                        rsaSignPublicKey: {
+                                            n: BigInt('{%rsa_public_n%}'),
+                                            e: BigInt('{%rsa_public_e%}')
                                         }
                                     };
-                                </script>
-                                <script src="/js/zkp.js"></script>
-                                <script>
                                     // Вызываем инициализацию после загрузки DOM
                                     document.addEventListener('DOMContentLoaded', () => {
                                         window.initializeZKP(EV_PARAMS);
