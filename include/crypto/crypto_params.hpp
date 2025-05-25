@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include "bigint.hpp"
 
 class CryptoParams {
@@ -8,6 +9,10 @@ class CryptoParams {
     static BigInt rsaE;
     static BigInt pailierN;
     static BigInt pailierLambda;
+    static std::string jwtSecret;
+    static std::string jwtIssuer;
+    static int jwtAuthTokenValidityMinutes;
+    static int jwtRefreshTokenValidityMinutes;
 
     static void loadFromJson(const std::string& configPath);
 };
