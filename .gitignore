@@ -2,4 +2,5 @@ build/
 .vscode/
 builddir/
 compile_commands.json
+crypto_params.json
 .cache/
