@@ -19,8 +19,10 @@ os=Linux
 ## Процесс установки
 ```bash
 conan install . --output-folder=builddir/build_conan -s build_type=Release -d direct_deploy --deployer-folder builddir/build_conan/deploy --build=missing
+
 source builddir/build_conan/activate_drogon_ctl.sh  
 export PKG_CONFIG_PATH="$PWD/builddir/build_conan"
+
 meson setup builddir
 cd builddir
 meson compile    
