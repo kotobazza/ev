@@ -17,6 +17,7 @@ gtest_dep = dependency('gtest') # Без `main: true`
 
 crypto_includes = include_directories('include/crypto')
 controllers_includes = include_directories('include/controllers')
+filters_includes = include_directories('include/filters')
 
 drogon_ctl_check = run_command(
   'sh',
@@ -85,6 +86,7 @@ executable_sources = files(
   'src/controllers/voting_controller.cpp',
   'src/crypto/bigint.cpp',
   'src/crypto/crypto_params.cpp',
+  'src/filters/jwt_auth_filter.cpp',
   'src/main.cpp',
 )
 
@@ -92,7 +94,7 @@ executable(
   'drogon_demo',
   sources: executable_sources + view_sources,
   dependencies: deps,
-  include_directories: [controllers_includes, crypto_includes],
+  include_directories: [controllers_includes, crypto_includes, filters_includes],
   install: true,
 )
 
