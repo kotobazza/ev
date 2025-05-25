@@ -12,6 +12,7 @@ std::string CryptoParams::jwtSecret;
 std::string CryptoParams::jwtIssuer;
 int CryptoParams::jwtAuthTokenValidityMinutes;
 int CryptoParams::jwtRefreshTokenValidityMinutes;
+std::string CryptoParams::votingId;
 
 void CryptoParams::loadFromJson(const std::string& configPath) {
     std::ifstream configFile(configPath);
@@ -36,4 +37,5 @@ void CryptoParams::loadFromJson(const std::string& configPath) {
     jwtIssuer = root["123"]["jwt"]["jwtIssuer"].asString();
     jwtAuthTokenValidityMinutes = root["123"]["jwt"]["jwtAuthTokenValidityMinutes"].asInt();
     jwtRefreshTokenValidityMinutes = root["123"]["jwt"]["jwtRefreshTokenValidityMinutes"].asInt();
+    votingId = root["123"]["voting_id"].asString();
 }

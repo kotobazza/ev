@@ -13,6 +13,7 @@ class CryptoParams {
     static std::string jwtIssuer;
     static int jwtAuthTokenValidityMinutes;
     static int jwtRefreshTokenValidityMinutes;
+    static std::string votingId;
 
     static void loadFromJson(const std::string& configPath);
 };
